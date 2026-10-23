@@ -13,6 +13,6 @@ research/notability-login.html
 ios/build/
 ios/*.xcodeproj/
 *.ipa
-models/
+/models/
 vendor/whisper/
 notakillite-output/
