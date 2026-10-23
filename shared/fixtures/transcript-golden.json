@@ -1,0 +1,88 @@
+{
+  "lecture": {
+    "title": "Anatomy: \"L3\" | wall",
+    "recording": "Recording 1",
+    "sourceFile": "Anatomy L3.note",
+    "duration": 3705.5,
+    "cleanup": "Apple Voice Isolation",
+    "number": 3,
+    "total": 5,
+    "createdAt": "2026-10-23T10:00:00.000Z",
+    "includePrompt": true,
+    "transcript": {
+      "language": "ar",
+      "model": "Whisper large-v3-turbo",
+      "device": "iPhone",
+      "segments": [
+        {
+          "start": 0.2,
+          "end": 4.8,
+          "text": " اليوم نتكلم عن the anterior abdominal wall"
+        },
+        {
+          "start": 5,
+          "end": 9.5,
+          "text": "وهذا   مهم جداً للامتحان."
+        },
+        {
+          "start": 14,
+          "end": 18,
+          "text": "Next, the rectus sheath."
+        },
+        {
+          "start": 18.5,
+          "end": 80,
+          "text": "A very long explanation that keeps going."
+        },
+        {
+          "start": 80.5,
+          "end": 82,
+          "text": "Then a new paragraph because of the 60 s cap."
+        },
+        {
+          "start": 3700,
+          "end": 3705.5,
+          "text": "Final point."
+        },
+        {
+          "start": 3706,
+          "end": 3706.5,
+          "text": "   "
+        }
+      ]
+    }
+  },
+  "index": {
+    "title": "Anatomy week 3",
+    "createdAt": "2026-10-23T10:00:00.000Z",
+    "lectures": [
+      {
+        "number": 1,
+        "title": "Intro | overview",
+        "duration": 3000,
+        "words": 5000,
+        "transcript": "01 - Intro.md"
+      },
+      {
+        "number": 2,
+        "title": "Muscles",
+        "duration": 600,
+        "words": 900,
+        "transcript": "02 - Muscles.md"
+      },
+      {
+        "number": 3,
+        "title": "No speech",
+        "duration": 59,
+        "words": 0,
+        "transcript": ""
+      }
+    ]
+  },
+  "expected": {
+    "lecture": "---\ntitle: \"Anatomy: \\\"L3\\\" | wall\"\nlecture: 3 of 5\nrecording: \"Recording 1\"\nsource_file: \"Anatomy L3.note\"\nduration: \"01:01:45\"\nlanguage: \"Arabic\"\nnoise_cleanup: \"Apple Voice Isolation\"\ntranscribed_with: \"Whisper large-v3-turbo (iPhone)\"\nwords: 34\ncreated: \"2026-10-23\"\n---\n\n# Anatomy: \"L3\" | wall\n\n> This is an automatic transcript of a university lecture, kept in the language(s) the lecturer spoke (often Arabic with English terms).\n> Each paragraph starts with a [hh:mm:ss] timestamp from the recording. Speech recognition can mishear names and technical terms; correct obvious errors from context and say when unsure.\n> Suggested request: list everything the lecturer said is important, will be on the exam, quiz or assignment, or must be memorised (quote it with its timestamp). Then give the key concepts, definitions, lists and a short summary.\n\n## Transcript\n\n**[00:00:00]** اليوم نتكلم عن the anterior abdominal wall وهذا مهم جداً للامتحان.\n\n**[00:00:14]** Next, the rectus sheath.\n\n**[00:00:18]** A very long explanation that keeps going.\n\n**[00:01:20]** Then a new paragraph because of the 60 s cap.\n\n**[01:01:40]** Final point.\n",
+    "lectureWithoutPrompt": "---\ntitle: \"Anatomy: \\\"L3\\\" | wall\"\nlecture: 3 of 5\nrecording: \"Recording 1\"\nsource_file: \"Anatomy L3.note\"\nduration: \"01:01:45\"\nlanguage: \"Arabic\"\nnoise_cleanup: \"Apple Voice Isolation\"\ntranscribed_with: \"Whisper large-v3-turbo (iPhone)\"\nwords: 34\ncreated: \"2026-10-23\"\n---\n\n# Anatomy: \"L3\" | wall\n\n## Transcript\n\n**[00:00:00]** اليوم نتكلم عن the anterior abdominal wall وهذا مهم جداً للامتحان.\n\n**[00:00:14]** Next, the rectus sheath.\n\n**[00:00:18]** A very long explanation that keeps going.\n\n**[00:01:20]** Then a new paragraph because of the 60 s cap.\n\n**[01:01:40]** Final point.\n",
+    "empty": "---\ntitle: \"Empty\"\nrecording: \"r\"\nsource_file: \"s\"\nduration: \"00:00:00\"\nlanguage: \"English\"\nnoise_cleanup: \"None\"\ntranscribed_with: \"m\"\nwords: 0\ncreated: \"2026-10-23\"\n---\n\n# Empty\n\n> This is an automatic transcript of a university lecture, kept in the language(s) the lecturer spoke (often Arabic with English terms).\n> Each paragraph starts with a [hh:mm:ss] timestamp from the recording. Speech recognition can mishear names and technical terms; correct obvious errors from context and say when unsure.\n> Suggested request: list everything the lecturer said is important, will be on the exam, quiz or assignment, or must be memorised (quote it with its timestamp). Then give the key concepts, definitions, lists and a short summary.\n\n## Transcript\n\n_No speech was detected in this recording._\n",
+    "index": "# Anatomy week 3\n\n3 lectures · 1 h 0 min of audio · 2026-10-23\n\nUpload the numbered `.md` files to ChatGPT or Claude (one chat for the whole course works well). Each file has the lecture's transcript with timestamps and a suggested request at the top.\n\n| # | Lecture | Length | Words | Transcript |\n|---|---|---|---|---|\n| 1 | Intro \\| overview | 00:50:00 | 5000 | [01 - Intro.md](<01 - Intro.md>) |\n| 2 | Muscles | 00:10:00 | 900 | [02 - Muscles.md](<02 - Muscles.md>) |\n| 3 | No speech | 00:00:59 | 0 | — |\n"
+  }
+}

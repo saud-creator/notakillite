@@ -1,0 +1,4 @@
+# Model and engine files must stay byte-identical (their SHA-256 hashes are pinned).
+vendor/** -text
+*.rnnn -text
+*.wav binary

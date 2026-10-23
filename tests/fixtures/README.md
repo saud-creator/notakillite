@@ -1,0 +1,1 @@
+`spoken-lecture.wav` is generated English speech for local noise/codec regression tests. It contains only the sentence in `scripts/generate-speech-fixture.ps1`, synthesized with Windows System.Speech. It contains no user recording or account data. The tests add deterministic white noise and encode their own AAC/ALAC and other-format fixtures from it.

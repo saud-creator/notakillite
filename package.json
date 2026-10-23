@@ -1,0 +1,32 @@
+{
+  "name": "notakillite",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Live Notability web audio exporter with local speech cleanup",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start-native.mjs",
+    "start:legacy": "node companion/server.mjs",
+    "test": "node --experimental-vm-modules --test --test-concurrency=1 tests/*.test.mjs",
+    "install:engines": "node scripts/install-engines.mjs",
+    "transcribe": "node scripts/transcribe.mjs",
+    "test:browser": "node scripts/browser-smoke.mjs",
+    "test:browser-export": "node scripts/browser-export-smoke.mjs",
+    "package": "node scripts/package.mjs",
+    "build:exe": "node scripts/build-exe.mjs",
+    "test:engines": "node --test tests/noise-engines.test.mjs",
+    "test:advanced-browser": "node scripts/advanced-browser-smoke.mjs",
+    "test:native-bridge": "node scripts/brave/native-bridge-smoke.mjs",
+    "test:native-ui": "node scripts/brave/native-ui-smoke.mjs",
+    "test:packaged": "node scripts/test-native-payload.mjs"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.3.0"
+  },
+  "allowScripts": {
+    "ffmpeg-static@5.3.0": true
+  },
+  "devDependencies": {
+    "playwright-core": "^1.58.2"
+  }
+}

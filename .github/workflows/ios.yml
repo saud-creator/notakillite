@@ -1,0 +1,66 @@
+name: iPhone app
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths: ['ios/**', 'shared/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', 'shared/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test and build unsigned IPA
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ hashFiles('ios/project.yml') }}
+
+      - name: Unit tests (simulator)
+        working-directory: ios
+        run: |
+          set -o pipefail
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for r,v in sorted(d.items(), reverse=True) if 'iOS' in r for x in v if x['name'].startswith('iPhone')))")
+          xcodebuild test -project Notakillite.xcodeproj -scheme Notakillite -destination "id=$DEVICE" CODE_SIGNING_ALLOWED=NO | tee test.log | grep -E "error:|warning: .*Notakillite|Test Case|Executed|\*\* TEST" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" test.log
+
+      - name: Build unsigned IPA
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild archive -project Notakillite.xcodeproj -scheme Notakillite -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Notakillite.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -5
+          mkdir -p build/ipa/Payload
+          cp -R build/Notakillite.xcarchive/Products/Applications/Notakillite.app build/ipa/Payload/
+          (cd build/ipa && zip -qr ../Notakillite-unsigned.ipa Payload)
+          ls -lh build/Notakillite-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Notakillite-iOS-unsigned
+          path: ios/build/Notakillite-unsigned.ipa
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Notakillite $GITHUB_REF_NAME" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" ios/build/Notakillite-unsigned.ipa --clobber
+    permissions:
+      contents: write

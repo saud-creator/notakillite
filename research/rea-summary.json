@@ -1,0 +1,105 @@
+{
+  "investigatedOn": "2026-10-20",
+  "tool": {
+    "name": "rea-agents",
+    "version": "6.7.0",
+    "repository": "https://github.com/morluto/rea",
+    "checkoutCommit": "c3d7d0aafc4943c82a5a8513cd3da7f4a7cfe643"
+  },
+  "publicApp": {
+    "entry": "https://notability.com/app",
+    "buildSha": "942a2eee50ae95415da7985f89b7d966de2d1f85"
+  },
+  "evidence": {
+    "id": "ev_24a85d5e4a55552f01054f69af6d243e3e33676cf18e34d69898c52db6fb01e1",
+    "operation": "analyze_javascript_application",
+    "provider": {
+      "id": "rea-javascript-application",
+      "name": "REA JavaScript application analyzer",
+      "version": "1"
+    },
+    "authority": "shipped-artifact",
+    "confidence": "derived",
+    "sourceFile": "research/rea-evidence.json",
+    "sourceBytes": 232538421,
+    "subject": {
+      "name": "notability-public",
+      "digest": {
+        "sha256": "3aacfdf07a5d2b28efcc92431a4fdd9541419ce9661a508ad38a1072bc36b7cb"
+      },
+      "local_path": "%USERPROFILE%\\Documents\\notakillite\\research\\notability-public",
+      "format": "directory",
+      "architecture": null
+    },
+    "parameters": {
+      "format": "auto",
+      "integrity_policy": "fail"
+    },
+    "rootArtifactSha256": "3aacfdf07a5d2b28efcc92431a4fdd9541419ce9661a508ad38a1072bc36b7cb",
+    "inventoryManifestId": "agm_115b372646ae7caff150518857c5fec4cf9e8bab0e6fb03a357e670a5727d7af",
+    "inventoryGraphSha256": "e403475cdcdb1647605d2712baad32aafe0615d2c34799e0e2bc55938b87d6bf"
+  },
+  "result": {
+    "topLevelError": null,
+    "summary": {
+      "browser_windows": 0,
+      "explicit_web_preferences": 0,
+      "preload_entrypoints": 0,
+      "context_bridge_apis": 0,
+      "exposed_api_members": 0,
+      "ipc": {
+        "operations": 0,
+        "literal_channels": 0,
+        "dynamic_channel_operations": 0,
+        "renderer_transmissions": 0,
+        "renderer_listeners": 0,
+        "main_handlers": 0,
+        "paired_renderer_transmissions": 0,
+        "ambiguous_renderer_transmissions": 0,
+        "unpaired_literal_renderer_transmissions": 0
+      },
+      "sender_validation_observations": 0,
+      "utility_processes": 0,
+      "resolved_utility_entrypoints": 0,
+      "native_addon_bindings": 0,
+      "resolved_native_addon_bindings": 0
+    },
+    "statistics": {
+      "relevant_files": 12,
+      "nested_asar_containers": 0,
+      "text_bytes_read": 7014828,
+      "invalid_utf8_files": 0,
+      "parsed_javascript_files": 10,
+      "skipped_javascript_files": 1,
+      "visited_ast_nodes": 1818249,
+      "findings": 3712,
+      "modules": 0,
+      "parse_failures": 0
+    },
+    "graph": {
+      "nodeCount": 1367,
+      "edgeCount": 3734,
+      "nodeKinds": {
+        "javascript-module": 1092,
+        "endpoint": 238,
+        "storage": 20,
+        "javascript-asset": 11,
+        "artifact": 2,
+        "worker": 2,
+        "electron-renderer": 1,
+        "unknown": 1
+      }
+    },
+    "integrityContradictionCount": 0
+  },
+  "limitations": [
+    "CommonJS and ESM binding relationships were recovered from inert syntax and resolved only within the inventoried artifact container.",
+    "Graph coverage is incomplete; unavailable facts remain explicit and must not be read as absence.",
+    "JavaScript and HTML were parsed as inert text; bundle bootstrap code was never executed.",
+    "Static imports, entrypoints, workers, endpoints, and storage relationships do not prove runtime execution.",
+    "Static paths and relationships may remain unresolved when expressions are dynamic or obfuscated.",
+    "Webpack/Rspack factories were recovered from AST literals; REA did not invoke push handlers or bundle bootstrap code.",
+    "main-Ve_jYu3O.js: Resource constraint during analyze_javascript_application: Owned JavaScript worker exhausted its heap while analyzing main-Ve_jYu3O.js during static"
+  ],
+  "scope": "Static analysis of downloaded public production scripts. The final invocation completed successfully with partial coverage: one worker exhausted its heap. This evidence does not itself establish authenticated runtime behavior."
+}

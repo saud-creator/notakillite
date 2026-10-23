@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Notakillite Brave Connector",
+  "version": "0.5.0",
+  "description": "Connect your regular Brave Notability session to the local Notakillite desktop app. Audio processing stays on your computer.",
+  "minimum_chrome_version": "120",
+  "permissions": ["nativeMessaging", "scripting", "storage", "alarms"],
+  "host_permissions": ["https://notability.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "Connect Notakillite", "default_popup": "connect.html" },
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'" },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXb5b+W5oi/yF+B8LT7Lwk4fBDhhzny+EKchshCsNl7KHjr9kVbFBLnZ2wAZnewSli0XPjhNbYE1kXZg0TIJ1eePXrrPNWYvfA+mvb8mQZWWK8Gvfx2ZgiT3WFbxnc6tzM8is+IMYtWUVXzWxjc2AUBW0FYyeTSm1MS15zANnho3UdkZdZHBpuJAWp0MxA4LdndjvJVpwvIRq3N4Qrz77kZWRmYIyjTDS/AqPk1/0noe6sDP7GlGrTgSEBySB8SxFSi2h5HH/Wfjfj4pvfYzJkZ9g+Mt7HoaF+BMVzrDzsGMIos1ouAtUkLwCr+7WRodsjSlb7z8vyF/vFRupFJSowIDAQAB"
+}

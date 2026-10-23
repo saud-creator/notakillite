@@ -1,0 +1,132 @@
+name: Windows app
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # whisper.cpp release b5454 (same commit as the pinned CPU bundle in scripts/install-engines.mjs).
+  WHISPER_COMMIT: d1be6fde11ac6e0407606b4e42fe72d34add8037
+  VULKAN_VERSION: 1.4.313.2
+
+jobs:
+  whisper-vulkan:
+    name: Build whisper.cpp (Vulkan GPU)
+    runs-on: windows-latest
+    steps:
+      - name: Restore cached build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: whisper-vulkan
+          key: whisper-vulkan-${{ env.WHISPER_COMMIT }}-${{ env.VULKAN_VERSION }}-v1
+
+      - name: Check out whisper.cpp
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ env.WHISPER_COMMIT }}
+          path: whisper.cpp
+
+      - name: Install Vulkan SDK
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          curl.exe -fsSL -o "$env:RUNNER_TEMP\vulkan.exe" "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          & "$env:RUNNER_TEMP\vulkan.exe" --accept-licenses --default-answer --confirm-command install | Out-Null
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        working-directory: whisper.cpp
+        run: |
+          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON `
+            -DGGML_VULKAN=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF `
+            -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          cmake --build build --config Release -j 4 --target whisper-cli
+          New-Item -ItemType Directory -Force ..\whisper-vulkan | Out-Null
+          Copy-Item build\bin\Release\whisper-cli.exe, build\bin\Release\whisper.dll ..\whisper-vulkan\
+          Copy-Item build\bin\Release\ggml*.dll ..\whisper-vulkan\
+          Copy-Item LICENSE ..\whisper-vulkan\LICENSE
+          Get-ChildItem ..\whisper-vulkan
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-vulkan
+          path: whisper-vulkan
+          retention-days: 30
+
+  build:
+    name: Test and build Notakillite.exe
+    needs: whisper-vulkan
+    runs-on: windows-latest
+    env:
+      NOTAKILLITE_MODELS_DIR: ${{ github.workspace }}\.local\models
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - run: npm ci
+
+      - name: Cache test Whisper model
+        uses: actions/cache@v4
+        with:
+          path: .local/models
+          key: whisper-models-tiny-v1
+
+      - name: Install audio and speech engines
+        run: npm run install:engines
+
+      - name: Add the Vulkan GPU build
+        uses: actions/download-artifact@v4
+        with:
+          name: whisper-vulkan
+          path: vendor/whisper/vulkan
+
+      - name: Tests
+        run: npm test
+
+      - name: Build EXE
+        run: node scripts/build-exe.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Notakillite-windows
+          path: |
+            release/Notakillite.exe
+            release/Notakillite-Brave-Connector.zip
+
+  release:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Notakillite-windows
+          path: dist
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Notakillite $GITHUB_REF_NAME" --generate-notes || true
+          gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber

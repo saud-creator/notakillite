@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>Notakillite · Audio for AI</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="rpc.js" defer></script>
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <a class="brand" href="#" id="brand-link" aria-label="Open Notability">
+        <span class="brand-mark" aria-hidden="true"><svg width="23" height="23" viewBox="0 0 24 24" fill="none"><path d="M4 10v4m4-8v12m4-15v18m4-15v12m4-8v4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></span>
+        <span>notakillite<span class="brand-caption">AUDIO FOR AI</span></span>
+      </a>
+      <span class="connection" id="connection" role="status"><span class="status-dot"></span><span id="connection-label">Checking session</span></span>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="intro-title">
+        <span class="eyebrow">FROM YOUR NOTES. INTO YOUR NEXT IDEA.</span>
+        <h1 id="intro-title">Take the audio<br><span>with you.</span></h1>
+        <p>Your lecture recordings, cleaned up and ready to share with your AI of choice.</p>
+        <div class="intro-actions">
+          <button class="button button-primary" id="open-notability" type="button">Open Notability <span aria-hidden="true">↗</span></button>
+          <button class="button button-icon" id="refresh" type="button" aria-label="Refresh notes" title="Refresh notes"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.1 7.1A7 7 0 0 1 18 6l2 3M4 15l2 3a7 7 0 0 0 11.9-1.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+      </section>
+
+      <details class="preferences" id="export-settings" open>
+        <summary class="section-heading"><h2 id="preferences-title">Export preferences<span id="engine-summary" class="engine-summary">DeepFilterNet3 · Balanced</span></h2><span id="processor-status" class="processor-status">Checking processor</span><span class="settings-chevron" aria-hidden="true">⌄</span></summary>
+        <label class="setting-row" for="clean-audio">
+          <span><span class="setting-title">Clean speech</span><span class="setting-description">Reduce noise and balance volume</span></span>
+          <span class="switch"><input id="clean-audio" type="checkbox" checked><span class="switch-track" aria-hidden="true"></span></span>
+        </label>
+        <label class="setting-row engine-row" for="noise-engine"><span class="setting-title">Noise reduction</span><select id="noise-engine"><option value="deepfilter" selected>DeepFilterNet3</option><option value="rnnoise">RNNoise · fast</option><option value="hybrid">Both engines</option><option value="classic">Light cleanup</option></select></label>
+        <p id="engine-description" class="engine-description">Detailed speech cleanup. Runs entirely on your computer.</p>
+        <label class="setting-row strength-row" for="noise-strength"><span class="setting-title">Strength</span><select id="noise-strength"><option value="balanced" selected>Balanced · preserve voice</option><option value="strong">Strong · heavy noise</option></select></label>
+        <label class="setting-row split-row" for="split-minutes"><span class="setting-title">Split long recordings</span><select id="split-minutes"><option value="10">Every 10 minutes</option><option value="20" selected>Every 20 minutes</option><option value="30">Every 30 minutes</option><option value="0">Keep one file</option></select></label>
+        <p class="output-description">AI-ready MP3 · audio stays on this computer</p>
+        <div id="processor-help" class="processor-help" hidden><span>Start the local companion for cleanup and splitting.</span><button type="button" id="use-originals" class="text-button">Use original audio</button></div>
+      </details>
+
+      <details class="local-import" id="local-import"><summary>Clean a file from your computer <span aria-hidden="true">＋</span></summary><div id="file-drop" class="file-drop"><label for="audio-file" class="file-label">Choose audio or drop a file here<input id="audio-file" type="file" accept="audio/*,video/mp4,video/quicktime,.m4a,.aac,.alac,.aiff,.aif,.caf,.flac,.ogg,.opus,.webm,.wma,.amr,.3gp"></label><p>M4A, MP3, WAV, AAC, FLAC, CAF &amp; more</p><p id="selected-file" class="selected-file" hidden></p><button id="process-file" type="button" class="button button-primary" disabled>Clean &amp; export MP3</button><div id="file-results" class="file-results" hidden></div></div></details>
+
+      <div id="feedback" class="feedback" role="status" hidden><span id="feedback-text"></span><button id="dismiss-feedback" type="button" aria-label="Dismiss message">×</button></div>
+      <div id="export-progress" class="export-progress" hidden><progress id="progress-meter" max="1" aria-label="Audio export progress"></progress><span id="progress-caption">Preparing audio…</span></div>
+
+      <section class="library" aria-labelledby="library-title">
+        <div class="section-heading library-heading"><h2 id="library-title">Your library <span id="note-count" class="count">0</span></h2><span class="live-label"><span class="status-dot"></span><span id="live-label-text">ACCOUNT LIBRARY</span></span></div>
+        <label class="search-box"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input id="search" type="search" placeholder="Search all folders and notes…" aria-label="Search notes and recordings"></label>
+        <div class="library-options"><label class="audio-filter"><input id="audio-only" type="checkbox"> Audio only</label><span id="library-sort" class="sort-description"></span></div>
+        <label id="workspace-control" class="workspace-control" hidden>Library <select id="workspace-select" aria-label="Select library"></select></label>
+        <nav id="library-path" class="library-path" aria-label="Folder location"></nav>
+        <div id="library-folders" class="library-folders" aria-label="Folders"></div>
+        <h3 id="note-section-heading" class="note-section-heading" hidden></h3>
+        <div id="notes" class="notes" aria-live="polite"></div>
+        <div id="empty-state" class="empty-state" hidden>
+          <span class="empty-icon" aria-hidden="true"><svg width="27" height="27" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="12" rx="3" stroke="currentColor" stroke-width="1.6"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span>
+          <h3 id="empty-title">Your lectures will appear here</h3>
+          <p id="empty-description">Sign in on notability.com and keep your library open. Your synced notes will appear here; choose a note to load its recordings.</p>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="app-footer"><span>From your account to your computer.</span><div><button id="open-output" type="button" class="text-button">Export folder ↗</button><button id="clear-session" type="button" class="text-button muted" title="Clear the locally loaded recording list">Clear list</button></div></footer>
+  </body>
+</html>

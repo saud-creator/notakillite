@@ -1,0 +1,243 @@
+{
+  "scope": "Interactive design prototype only; no real account or audio processing",
+  "date": "2026-10-21T11:53:04.521Z",
+  "checks": [
+    {
+      "name": "Library and compact idle queue",
+      "status": "passed",
+      "evidence": "8 sample notes in selected folder; 2 recordings selected; idle queue is 53 pixels tall including border."
+    },
+    {
+      "name": "light semantic text contrast",
+      "status": "passed",
+      "evidence": {
+        "minimum": 5.334963357075923,
+        "ratios": [
+          {
+            "foreground": "--text",
+            "background": "--bg",
+            "ratio": 15.066425430227888
+          },
+          {
+            "foreground": "--muted",
+            "background": "--bg",
+            "ratio": 6.357607659477405
+          },
+          {
+            "foreground": "--muted",
+            "background": "--panel",
+            "ratio": 6.110279024031048
+          },
+          {
+            "foreground": "--muted",
+            "background": "--raised",
+            "ratio": 5.544074121388855
+          },
+          {
+            "foreground": "--text",
+            "background": "--selected",
+            "ratio": 12.642936132203817
+          },
+          {
+            "foreground": "--muted",
+            "background": "--selected",
+            "ratio": 5.334963357075923
+          },
+          {
+            "foreground": "--accent-ink",
+            "background": "--accent",
+            "ratio": 6.930092510976448
+          },
+          {
+            "foreground": "--accent",
+            "background": "--selected",
+            "ratio": 5.815361939186524
+          },
+          {
+            "foreground": "--green",
+            "background": "--panel",
+            "ratio": 6.176852758284414
+          },
+          {
+            "foreground": "--warning",
+            "background": "--raised",
+            "ratio": 5.397741580927318
+          },
+          {
+            "foreground": "--red",
+            "background": "--panel",
+            "ratio": 6.822841005563997
+          }
+        ]
+      }
+    },
+    {
+      "name": "light rendered text contrast",
+      "status": "passed",
+      "evidence": {
+        "elements": 35,
+        "minimum": 5.334963357075923
+      }
+    },
+    {
+      "name": "dark semantic text contrast",
+      "status": "passed",
+      "evidence": {
+        "minimum": 6.8107888590167525,
+        "ratios": [
+          {
+            "foreground": "--text",
+            "background": "--bg",
+            "ratio": 15.659267179248015
+          },
+          {
+            "foreground": "--muted",
+            "background": "--bg",
+            "ratio": 8.899299691790153
+          },
+          {
+            "foreground": "--muted",
+            "background": "--panel",
+            "ratio": 8.31185811894203
+          },
+          {
+            "foreground": "--muted",
+            "background": "--raised",
+            "ratio": 7.329724652284954
+          },
+          {
+            "foreground": "--text",
+            "background": "--selected",
+            "ratio": 12.308548590197132
+          },
+          {
+            "foreground": "--muted",
+            "background": "--selected",
+            "ratio": 6.995056755930876
+          },
+          {
+            "foreground": "--accent-ink",
+            "background": "--accent",
+            "ratio": 8.058033921928184
+          },
+          {
+            "foreground": "--accent",
+            "background": "--selected",
+            "ratio": 6.8107888590167525
+          },
+          {
+            "foreground": "--green",
+            "background": "--panel",
+            "ratio": 10.064435405703145
+          },
+          {
+            "foreground": "--warning",
+            "background": "--raised",
+            "ratio": 9.410489177233153
+          },
+          {
+            "foreground": "--red",
+            "background": "--panel",
+            "ratio": 9.585050378149562
+          }
+        ]
+      }
+    },
+    {
+      "name": "dark rendered text contrast",
+      "status": "passed",
+      "evidence": {
+        "elements": 35,
+        "minimum": 6.995056755930876
+      }
+    },
+    {
+      "name": "Audio filter and Arabic search",
+      "status": "passed",
+      "evidence": "6 audio notes in selected folder; Arabic global search finds the sample lecture and uses RTL text direction."
+    },
+    {
+      "name": "Recording selection and advanced settings",
+      "status": "passed",
+      "evidence": "No selection disables export; Select all restores it; combined engine warning and split summary update."
+    },
+    {
+      "name": "Connection failures retain library",
+      "status": "passed",
+      "evidence": "Offline and rejected sign-in show contextual actions; remote export is disabled while sample library remains visible."
+    },
+    {
+      "name": "First launch and unavailable engine",
+      "status": "passed",
+      "evidence": "First launch has focused onboarding; choosing RNNoise explicitly enables export when DeepFilterNet3 is unavailable."
+    },
+    {
+      "name": "Responsive panels and keyboard search",
+      "status": "passed",
+      "evidence": "1024×768 detail pane opens and dismisses; 760×768 folder drawer works; Ctrl+F focuses search."
+    },
+    {
+      "name": "Simulated export/cancel/retry/completion",
+      "status": "passed",
+      "evidence": "Demo can be cancelled and retried; completed-output dialog clearly states that no file was created."
+    },
+    {
+      "name": "Self-contained prototype",
+      "status": "passed",
+      "evidence": "No JavaScript runtime errors and no remote network requests. No real browser profile was opened."
+    }
+  ],
+  "screenshots": [
+    {
+      "name": "desktop-dark.png",
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "name": "desktop-light.png",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "offline-cache.png",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "signin-attention.png",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "first-launch.png",
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "name": "compact-library.png",
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "name": "compact-detail.png",
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "name": "narrow-library.png",
+      "width": 760,
+      "height": 768
+    },
+    {
+      "name": "completed-export.png",
+      "width": 1440,
+      "height": 940
+    },
+    {
+      "name": "export-failure.png",
+      "width": 1280,
+      "height": 800
+    }
+  ],
+  "result": "passed"
+}

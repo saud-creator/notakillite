@@ -1,0 +1,50 @@
+{
+  "manifest_version": 3,
+  "name": "Notakillite — Notability audio for AI",
+  "version": "0.3.0",
+  "description": "Export recordings from your signed-in Notability web account, with optional local speech cleanup.",
+  "minimum_chrome_version": "120",
+  "permissions": [
+    "scripting",
+    "downloads",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://notability.com/*",
+    "http://127.0.0.1:43188/*"
+  ],
+  "action": {
+    "default_title": "Notakillite",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "worker-0.3.0.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://notability.com/app*"
+      ],
+      "js": [
+        "adapter.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://notability.com/app*"
+      ],
+      "js": [
+        "rpc.js",
+        "transfer.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:43188"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtXb5b+W5oi/yF+B8LT7Lwk4fBDhhzny+EKchshCsNl7KHjr9kVbFBLnZ2wAZnewSli0XPjhNbYE1kXZg0TIJ1eePXrrPNWYvfA+mvb8mQZWWK8Gvfx2ZgiT3WFbxnc6tzM8is+IMYtWUVXzWxjc2AUBW0FYyeTSm1MS15zANnho3UdkZdZHBpuJAWp0MxA4LdndjvJVpwvIRq3N4Qrz77kZWRmYIyjTDS/AqPk1/0noe6sDP7GlGrTgSEBySB8SxFSi2h5HH/Wfjfj4pvfYzJkZ9g+Mt7HoaF+BMVzrDzsGMIos1ouAtUkLwCr+7WRodsjSlb7z8vyF/vFRupFJSowIDAQAB"
+}
