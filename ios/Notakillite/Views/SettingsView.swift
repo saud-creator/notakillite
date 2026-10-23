@@ -12,6 +12,13 @@ struct SettingsView: View {
     @AppStorage("aiPrompt") private var aiPrompt = true
     @State private var keyDraft = ""
 
+    private var backgroundText: String {
+        if #available(iOS 26.0, *) {
+            return "You can leave the app while lectures are processed. Progress appears on the Lock Screen, where you can also stop it. Closing the app from the app switcher stops the work."
+        }
+        return "You can leave the app while lectures are processed: it keeps running by holding a silent audio session (this does not interrupt your music). Closing the app from the app switcher stops the work."
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -30,9 +37,12 @@ struct SettingsView: View {
                     TextField("Course vocabulary (optional)", text: $vocabulary, axis: .vertical).lineLimit(1...3)
                     Toggle("Add ChatGPT/Claude instructions at the top", isOn: $aiPrompt)
                 } header: { Text("Transcript") } footer: {
-                    Text(transcriber == .onDevice ? "Free and private. The model downloads once on first use (Wi-Fi recommended). Keep the app open while it works." : "Audio is uploaded to Groq. Free tier with daily limits.")
+                    Text(transcriber == .onDevice ? "Free and private. The model downloads once on first use (Wi-Fi recommended)." : "Audio is uploaded to Groq. Free tier with daily limits.")
                 }
                 .disabled(!transcribe)
+                Section {
+                    Text(backgroundText).font(.footnote)
+                } header: { Text("Working in the background") }
                 if transcriber == .groq {
                     Section {
                         SecureField(model.groqKey.isEmpty ? "Paste your Groq API key" : "Key saved · paste to replace", text: $keyDraft)

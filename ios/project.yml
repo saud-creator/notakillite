@@ -3,7 +3,7 @@ name: Notakillite
 options:
   bundleIdPrefix: com.saudcreator
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "18.0"   # iPhone and iPad from iOS/iPadOS 18; built with the latest (iOS 27) SDK in CI
   createIntermediateGroups: true
 
 packages:
@@ -43,6 +43,12 @@ targets:
       properties:
         CFBundleDisplayName: Notakillite
         UILaunchScreen: {}
+        # Keep working after the user leaves the app: Continuous Background Tasks on iOS 26+
+        # (Live Activity progress), silent audio session on iOS/iPadOS 18-25.
+        UIBackgroundModes: [audio, processing]
+        BGTaskSchedulerPermittedIdentifiers: ["$(PRODUCT_BUNDLE_IDENTIFIER).lectures.*"]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]

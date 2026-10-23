@@ -80,6 +80,12 @@ final class AppModel: ObservableObject {
 
     private var worker: Task<Void, Never>?
     private var current: (id: UUID, task: Task<Void, Never>)?
+    private var runJobs: [UUID] = []   // jobs handled by the current background run, for overall progress
+    private let keeper = BackgroundKeeper.shared
+
+    init() {
+        if CommandLine.arguments.contains("--ui-demo") { seedDemo() }
+    }
     private let fileManager = FileManager.default
     var exportsFolder: URL { fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("Lectures", isDirectory: true) }
     var importsFolder: URL { fileManager.temporaryDirectory.appendingPathComponent("imports", isDirectory: true) }
@@ -145,17 +151,40 @@ final class AppModel: ObservableObject {
     // MARK: Processing queue (one lecture at a time)
 
     private func startWorker() {
+        runJobs.append(contentsOf: jobs.filter { $0.status == .queued && !runJobs.contains($0.id) }.map(\.id))
         guard worker == nil else { return }
+        // Started by the user's import/paste/retry, so iOS 26+ lets it continue in the background.
+        keeper.begin(title: "Notakillite: transcribing lectures") { [weak self] in self?.cancelAll() }
         worker = Task { [weak self] in
             while let self, let next = self.jobs.first(where: { $0.status == .queued }) {
+                if !self.runJobs.contains(next.id) { self.runJobs.append(next.id) }
                 let task = Task { await self.run(jobID: next.id) }
                 self.current = (next.id, task)
                 await task.value
                 self.current = nil
             }
-            self?.worker = nil
-            UIApplication.shared.isIdleTimerDisabled = false
+            guard let self else { return }
+            let succeeded = self.jobs.filter { self.runJobs.contains($0.id) }.allSatisfy { $0.status == .done }
+            self.keeper.end(success: succeeded)
+            self.runJobs = []
+            self.worker = nil
         }
+    }
+
+    /// Stops the running lecture and everything waiting (used when the user stops the Live Activity).
+    func cancelAll() {
+        for index in jobs.indices where jobs[index].status == .queued { jobs[index].status = .cancelled; jobs[index].phase = "Cancelled" }
+        current?.task.cancel()
+    }
+
+    private func reportProgress() {
+        guard !runJobs.isEmpty else { return }
+        let items = jobs.filter { runJobs.contains($0.id) }
+        let finished = items.filter { if case .queued = $0.status { return false }; return $0.status != .running }.count
+        let running = items.first { $0.status == .running }
+        let fraction = (Double(finished) + (running?.progress ?? 0)) / Double(max(items.count, 1))
+        let detail = running.map { "\(min(finished + 1, items.count)) of \(items.count) · \($0.title) · \($0.phase)" } ?? "\(finished) of \(items.count) done"
+        keeper.update(fraction: fraction, detail: detail)
     }
 
     func cancel(_ id: UUID) {
@@ -169,7 +198,7 @@ final class AppModel: ObservableObject {
     }
 
     private func update(_ id: UUID, _ change: (inout LectureJob) -> Void) {
-        if let index = jobs.firstIndex(where: { $0.id == id }) { change(&jobs[index]) }
+        if let index = jobs.firstIndex(where: { $0.id == id }) { change(&jobs[index]); reportProgress() }
     }
 
     nonisolated private static func cleanAudio(_ input: URL, mode: CleanupMode, work: URL, progress: @escaping (Double) -> Void) async throws -> ProcessedAudio {
@@ -180,9 +209,6 @@ final class AppModel: ObservableObject {
         guard let job = jobs.first(where: { $0.id == jobID }), let batch = batches.first(where: { $0.id == job.batchID }) else { return }
         let settings = ProcessingSettings.current()
         let key = groqKey
-        UIApplication.shared.isIdleTimerDisabled = true // iOS pauses long work when the screen locks.
-        let background = UIApplication.shared.beginBackgroundTask(withName: "Lecture") {}
-        defer { UIApplication.shared.endBackgroundTask(background) }
         update(jobID) { $0.status = .running; $0.phase = "Cleaning audio"; $0.progress = 0.01 }
         let work = fileManager.temporaryDirectory.appendingPathComponent("work-\(jobID.uuidString)", isDirectory: true)
         defer { try? fileManager.removeItem(at: work) }
@@ -223,6 +249,27 @@ final class AppModel: ObservableObject {
         let done = jobs.filter { $0.batchID == batch.id && $0.markdown != nil }.sorted { $0.order < $1.order }
         let entries = done.map { TranscriptFormatter.IndexEntry(number: $0.order, title: $0.title, duration: $0.duration, words: $0.words, transcript: $0.markdown?.lastPathComponent) }
         try TranscriptFormatter.indexMarkdown(title: batch.title, lectures: entries).write(to: batch.folder.appendingPathComponent("00 - Index.md"), atomically: true, encoding: .utf8)
+    }
+
+    /// Sample content for screenshots and UI checks (launch argument --ui-demo). No real audio is used.
+    private func seedDemo() {
+        let folder = fileManager.temporaryDirectory.appendingPathComponent("demo", isDirectory: true)
+        try? fileManager.createDirectory(at: folder, withIntermediateDirectories: true)
+        let markdown = folder.appendingPathComponent("01 - Anatomy L3.md")
+        try? "# Anatomy L3\n".write(to: markdown, atomically: true, encoding: .utf8)
+        let course = LectureBatch(id: UUID(), title: "Anatomy week 3", folder: folder, created: Date())
+        let arabic = LectureBatch(id: UUID(), title: "محاضرة الجهاز الهضمي", folder: folder, created: Date())
+        batches = [course, arabic]
+        func recording(_ title: String) -> ImportedRecording { ImportedRecording(file: markdown, title: title, recordingName: "Recording", sourceName: "\(title).note") }
+        var done = LectureJob(recording: recording("Abdominal wall"), order: 1, batchID: course.id)
+        done.status = .done; done.phase = "Ready for AI · 6,240 words"; done.progress = 1; done.markdown = markdown; done.audio = markdown; done.words = 6240
+        var running = LectureJob(recording: recording("Inguinal canal"), order: 2, batchID: course.id)
+        running.status = .running; running.phase = "Transcribing 42%"; running.progress = 0.62
+        let queued = LectureJob(recording: recording("Rectus sheath"), order: 3, batchID: course.id)
+        var failed = LectureJob(recording: recording("الجهاز الهضمي"), order: 1, batchID: arabic.id)
+        failed.status = .failed("Groq's free limit was reached. Try again later, or use Whisper on this iPhone."); failed.phase = "Needs attention"
+        jobs = [done, running, queued, failed]
+        message = "Added 3 recordings."
     }
 
     func markdownText(_ job: LectureJob) -> String? { job.markdown.flatMap { try? String(contentsOf: $0, encoding: .utf8) } }

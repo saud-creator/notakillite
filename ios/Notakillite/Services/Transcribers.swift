@@ -1,3 +1,4 @@
+import CoreML
 import Foundation
 import WhisperKit
 
@@ -66,7 +67,9 @@ actor WhisperService {
                     stage("Downloading speech model (one time) · \(Int(progress.fractionCompleted * 100))%", progress.fractionCompleted * 0.3)
                 })
                 stage("Loading speech model", 0.3)
-                pipe = try await WhisperKit(WhisperKitConfig(model: variant, modelFolder: folder.path, verbose: false, logLevel: .error, prewarm: true, load: true, download: false))
+                // Keep every stage off the GPU: iOS stops apps that use the GPU in the background.
+                let compute = ModelComputeOptions(melCompute: .cpuOnly, audioEncoderCompute: .cpuAndNeuralEngine, textDecoderCompute: .cpuAndNeuralEngine)
+                pipe = try await WhisperKit(WhisperKitConfig(model: variant, modelFolder: folder.path, computeOptions: compute, verbose: false, logLevel: .error, prewarm: true, load: true, download: false))
                 loadedVariant = variant
             } catch { throw TranscriptionError.modelUnavailable(error.localizedDescription) }
         }

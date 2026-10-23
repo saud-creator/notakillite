@@ -1,4 +1,4 @@
-name: iPhone app
+name: iPhone and iPad app
 
 on:
   push:
@@ -13,9 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Test and build unsigned IPA
-    runs-on: macos-15
+  latest:
+    name: iOS 27 SDK · iPhone + iPad tests, screenshots, IPA
+    runs-on: xcode-27
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,22 +25,31 @@ jobs:
         run: |
           brew install xcodegen
           cd ios && xcodegen generate
+          xcodebuild -version
 
-      - name: Cache Swift packages
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
-          key: spm-${{ hashFiles('ios/project.yml') }}
+      - name: Pick simulators
+        working-directory: ios
+        run: |
+          echo "IPHONE=$(python3 ci/pick-simulator.py iPhone)" >> "$GITHUB_ENV"
+          echo "IPAD=$(python3 ci/pick-simulator.py iPad)" >> "$GITHUB_ENV"
 
-      - name: Unit tests (simulator)
+      - name: Unit tests on iPhone and iPad (iOS 27)
         working-directory: ios
         run: |
           set -o pipefail
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for r,v in sorted(d.items(), reverse=True) if 'iOS' in r for x in v if x['name'].startswith('iPhone')))")
-          xcodebuild test -project Notakillite.xcodeproj -scheme Notakillite -destination "id=$DEVICE" CODE_SIGNING_ALLOWED=NO | tee test.log | grep -E "error:|warning: .*Notakillite|Test Case|Executed|\*\* TEST" || true
+          xcodebuild test -project Notakillite.xcodeproj -scheme Notakillite -derivedDataPath build/dd \
+            -destination "id=$IPHONE" -destination "id=$IPAD" CODE_SIGNING_ALLOWED=NO \
+            | tee test.log | grep -E "error:|Test Case.*(passed|failed)|Executed|\*\* TEST" || true
           grep -q "\*\* TEST SUCCEEDED \*\*" test.log
 
-      - name: Build unsigned IPA
+      - name: Screenshots (sample data)
+        working-directory: ios
+        run: |
+          APP=build/dd/Build/Products/Debug-iphonesimulator/Notakillite.app
+          bash ci/screenshot.sh "$IPHONE" "$APP" build/screenshots/iphone-ios27.png light
+          bash ci/screenshot.sh "$IPAD" "$APP" build/screenshots/ipad-ios27-dark.png dark
+
+      - name: Build unsigned IPA (iOS 27 SDK, runs on iOS/iPadOS 18+)
         working-directory: ios
         run: |
           set -o pipefail
@@ -48,12 +59,19 @@ jobs:
           mkdir -p build/ipa/Payload
           cp -R build/Notakillite.xcarchive/Products/Applications/Notakillite.app build/ipa/Payload/
           (cd build/ipa && zip -qr ../Notakillite-unsigned.ipa Payload)
+          plutil -p build/ipa/Payload/Notakillite.app/Info.plist | grep -E "MinimumOSVersion|DTSDKName|UIDeviceFamily" -A2
           ls -lh build/Notakillite-unsigned.ipa
 
       - uses: actions/upload-artifact@v4
         with:
           name: Notakillite-iOS-unsigned
           path: ios/build/Notakillite-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-ios27
+          path: ios/build/screenshots
 
       - name: Attach to GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -62,5 +80,37 @@ jobs:
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Notakillite $GITHUB_REF_NAME" --generate-notes || true
           gh release upload "$GITHUB_REF_NAME" ios/build/Notakillite-unsigned.ipa --clobber
-    permissions:
-      contents: write
+
+  ipados18:
+    name: iPadOS 18 compatibility · iPad tests and screenshot
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+          xcodebuild -version
+
+      - name: Unit tests on an iPadOS 18 iPad
+        working-directory: ios
+        run: |
+          set -o pipefail
+          IPAD=$(python3 ci/pick-simulator.py iPad 18)
+          echo "IPAD=$IPAD" >> "$GITHUB_ENV"
+          xcrun simctl list devices | grep "$IPAD"
+          xcodebuild test -project Notakillite.xcodeproj -scheme Notakillite -derivedDataPath build/dd \
+            -destination "id=$IPAD" CODE_SIGNING_ALLOWED=NO \
+            | tee test.log | grep -E "error:|Test Case.*(passed|failed)|Executed|\*\* TEST" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" test.log
+
+      - name: Screenshot on iPadOS 18
+        working-directory: ios
+        run: bash ci/screenshot.sh "$IPAD" build/dd/Build/Products/Debug-iphonesimulator/Notakillite.app build/screenshots/ipad-ipados18.png light
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots-ipados18
+          path: ios/build/screenshots
