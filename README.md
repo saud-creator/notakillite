@@ -1,4 +1,4 @@
-# Notakillite 0.5.0
+# Notakillite 0.6.0
 
 Turn Notability lecture recordings into **clean audio and AI-ready transcripts**. Import a Notability note export (`.note`), audio files or a whole folder; Notakillite removes background noise such as air conditioning, transcribes the speech, and writes **one Markdown file per lecture** that you can upload to ChatGPT or Claude ("what did the doctor say is on the exam?").
 

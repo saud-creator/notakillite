@@ -18,7 +18,7 @@ async function setup(t) {
   t.after(async () => { store.close(); assert.ok(path.basename(root).startsWith('notakillite-native-')); await rm(root, { recursive: true, force: true }); });
   return { root, store, profileRoot: path.join(root, 'brave') };
 }
-const hello = (profileId, pairingNonce) => ({ extensionId: EXTENSION_ID, protocol: 1, version: '0.5.0', profileId, pairingNonce });
+const hello = (profileId, pairingNonce) => ({ extensionId: EXTENSION_ID, protocol: 1, version: '0.6.0', profileId, pairingNonce });
 
 test('one-time explicit pairing retains the usual Brave identity across three core instances without relaunching sign-in', async t => {
   const options = await setup(t); let launched;
