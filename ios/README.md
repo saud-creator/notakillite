@@ -1,6 +1,6 @@
-# Notakillite for iPhone
+# Notakillite for iPhone and iPad
 
-The same flow as the Windows app, on the phone: **import → remove background noise → transcribe → one Markdown file per lecture** for ChatGPT or Claude.
+One app for **iPhone (iOS 18 and later, built for iOS 27)** and **iPad (iPadOS 18 and later)**, with the same flow as the Windows app: **import → remove background noise → transcribe → one Markdown file per lecture** for ChatGPT or Claude.
 
 | Step | How it works on iPhone |
 | --- | --- |
@@ -11,7 +11,18 @@ The same flow as the Windows app, on the phone: **import → remove background n
 
 The Markdown is byte-for-byte the same format as the Windows app (checked by both test suites against [`shared/fixtures/transcript-golden.json`](../shared/fixtures/transcript-golden.json)).
 
-**Model choice:** "Recommended for this iPhone" lets WhisperKit pick what your device runs well. "Best · large-v3 turbo" gives the best Arabic/English accuracy on an iPhone 13 Pro or newer. Keep the app open while a long lecture is processed — iOS pauses long work in the background (the screen is kept awake while jobs run).
+**iPad:** imports appear in a sidebar beside their lectures; drag files from Files onto the window; keyboard shortcuts ⌘O (import), ⇧⌘V (paste), ⌘, (settings); multiple windows in Stage Manager.
+
+**Working in the background:** start an import and switch apps or lock the screen — processing continues.
+
+| System | How it keeps running |
+| --- | --- |
+| iOS / iPadOS 26 and later (incl. iOS 27) | Apple's Continuous Background Task: progress shows in a Live Activity on the Lock Screen, where you can also stop it. |
+| iOS / iPadOS 18–25 | A silent, mixable audio session keeps the app alive while jobs run (doesn't interrupt your music; uses some extra battery). Fine for sideloaded apps; Apple doesn't allow it on the App Store. |
+
+Speech recognition stays on the Neural Engine and CPU, because iOS doesn't allow GPU work in the background, so background transcription can be slower than with the app open. Closing the app from the app switcher stops all work.
+
+**Model choice:** "Recommended for this iPhone" lets WhisperKit pick what your device runs well. "Best · large-v3 turbo" gives the best Arabic/English accuracy on an iPhone 13 Pro or newer. 
 
 ## Install without a paid Apple account (free sideload)
 
