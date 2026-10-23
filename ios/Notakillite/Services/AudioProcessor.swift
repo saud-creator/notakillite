@@ -114,6 +114,8 @@ enum AudioProcessor {
             let out = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: capacity)!
             var readError: Error?
             let status = converter.convert(to: out, error: nil) { _, inputStatus in
+                // AVAudioFile throws (rather than returning 0 frames) when read at the end of the file.
+                if source.framePosition >= source.length { inputStatus.pointee = .endOfStream; return nil }
                 do {
                     try source.read(into: input)
                     if input.frameLength == 0 { inputStatus.pointee = .endOfStream; return nil }
@@ -149,8 +151,8 @@ enum AudioProcessor {
         let output = try AVAudioFile(forWriting: destination, settings: file.fileFormat.settings, commonFormat: file.processingFormat.commonFormat, interleaved: file.processingFormat.isInterleaved)
         var left = frames
         let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 65_536)!
-        while left > 0 {
-            try file.read(into: buffer, frameCount: min(left, buffer.frameCapacity))
+        while left > 0, file.framePosition < file.length {
+            try file.read(into: buffer, frameCount: min(left, buffer.frameCapacity, AVAudioFrameCount(file.length - file.framePosition)))
             if buffer.frameLength == 0 { break }
             try output.write(from: buffer)
             left -= buffer.frameLength
@@ -163,7 +165,8 @@ enum AudioProcessor {
         let rate = file.processingFormat.sampleRate
         let start = max(0, target - window)
         file.framePosition = AVAudioFramePosition(start * rate)
-        let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(window * 2 * rate))!
+        guard file.framePosition < file.length else { return target }
+        let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(min(window * 2 * rate, Double(file.length - file.framePosition))))!
         try file.read(into: buffer)
         guard let samples = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return target }
         let step = Int(rate / 4)

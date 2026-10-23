@@ -28,7 +28,7 @@ Five lectures in → five transcripts out, numbered in the order you imported th
 
 | Engine | Cost | Where audio goes | Speed (1-hour lecture) | When to use |
 | --- | --- | --- | --- | --- |
-| **Whisper on this PC** (default) — [whisper.cpp](https://github.com/ggml-org/whisper.cpp) with **large-v3-turbo** | Free | Never leaves the PC | A few minutes with the Vulkan GPU build; about 13 minutes on a modern 6-core CPU | Everyday use; private lectures |
+| **Whisper on this PC** (default) — [whisper.cpp](https://github.com/ggml-org/whisper.cpp) with **large-v3-turbo** | Free | Never leaves the PC | About 1 minute with the Vulkan GPU build (measured on a Radeon RX 9070 XT); about 13 minutes on a 6-core CPU | Everyday use; private lectures |
 | Whisper **large-v3** ("Best" accuracy) | Free | Never leaves the PC | Several times slower than turbo | Hard-to-hear or heavily Arabic lectures |
 | **Groq cloud** — `whisper-large-v3-turbo` / `whisper-large-v3` | Free tier with daily limits; needs your own key from [console.groq.com/keys](https://console.groq.com/keys) | Uploaded to Groq | Under a minute | When the PC is busy or you want it instantly |
 
