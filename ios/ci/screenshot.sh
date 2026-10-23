@@ -11,5 +11,13 @@ xcrun simctl terminate "$DEVICE" com.saudcreator.notakillite 2>/dev/null || true
 xcrun simctl launch "$DEVICE" com.saudcreator.notakillite --ui-demo >/dev/null
 sleep 8
 mkdir -p "$(dirname "$OUT")"
-xcrun simctl io "$DEVICE" screenshot "$OUT" >/dev/null
-echo "Saved $OUT"
+# Xcode 27 simulators can expose several displays and then need --display; older Xcode has no such option.
+if ! ERR=$(xcrun simctl io "$DEVICE" screenshot "$OUT" 2>&1 >/dev/null); then
+  for DISPLAY in $(echo "$ERR" | grep -o -- '--display=[0-9]*' | cut -d= -f2); do
+    xcrun simctl io "$DEVICE" screenshot --display="$DISPLAY" "${OUT%.png}-display$DISPLAY.png" >/dev/null
+    echo "Saved ${OUT%.png}-display$DISPLAY.png"
+  done
+  ls "${OUT%.png}"-display*.png >/dev/null 2>&1 || { echo "$ERR"; exit 1; }
+else
+  echo "Saved $OUT"
+fi
