@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Notakillite Brave Connector",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Connect your regular Brave Notability session to the local Notakillite desktop app. Audio processing stays on your computer.",
   "minimum_chrome_version": "120",
   "permissions": ["nativeMessaging", "scripting", "storage", "alarms"],

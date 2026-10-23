@@ -11,11 +11,11 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("Notakillite")]
 [assembly: AssemblyDescription("Native Windows Notability audio app with persistent Brave sign-in")]
 [assembly: AssemblyProduct("Notakillite")]
-[assembly: AssemblyVersion("0.6.0.0")]
-[assembly: AssemblyFileVersion("0.6.0.0")]
+[assembly: AssemblyVersion("0.7.0.0")]
+[assembly: AssemblyFileVersion("0.7.0.0")]
 internal static class WindowsLauncher
 {
-    private const string Version = "0.6.0";
+    private const string Version = "0.7.0";
     [STAThread]
     private static int Main(string[] args)
     {
