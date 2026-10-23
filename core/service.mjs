@@ -266,9 +266,10 @@ export class CoreService extends EventEmitter {
       const files = manifest.files.map(file => ({ ...file, name: renamed.get(file.name) || file.name, path: path.join(destination, renamed.get(file.name) || file.name) }));
       const transcriptPath = transcript ? path.join(destination, renamed.get('transcript.md') || 'transcript.md') : null;
       if (transcriptPath) files.push({ name: path.basename(transcriptPath), path: transcriptPath, kind: 'transcript', bytes: (await stat(transcriptPath)).size });
-      this.save(job, { status: 'done', phase: transcript ? `Ready for AI · ${transcript.words.toLocaleString('en-US')} words` : 'Ready for AI', fraction: 1, files, transcriptPath, transcript: transcript || null, finishedAt: new Date().toISOString(), input: null });
+      await rm(directory, { recursive: true, force: true }).catch(() => {});
+      Object.assign(job, { transcriptPath, transcript: transcript || null });
       if (batch && transcript) await this.writeIndex(job).catch(() => {});
-      await rm(directory, { recursive: true, force: true });
+      this.save(job, { status: 'done', phase: transcript ? `Ready for AI · ${transcript.words.toLocaleString('en-US')} words` : 'Ready for AI', fraction: 1, files, finishedAt: new Date().toISOString(), input: null });
     } catch (error) {
       const cancelled = signal.aborted;
       this.save(job, { status: this.closing ? 'interrupted' : cancelled ? 'cancelled' : 'error', phase: this.closing ? 'Interrupted — retry available' : cancelled ? 'Cancelled' : 'Export needs attention', error: error.message, fraction: null });
@@ -279,7 +280,7 @@ export class CoreService extends EventEmitter {
     }
   }
   async writeIndex(job) {
-    const done = this.jobs.filter(item => item.batchId === job.batchId && item.status === 'done' && item.transcriptPath).sort((a, b) => a.order - b.order);
+    const done = this.jobs.filter(item => item.batchId === job.batchId && (item === job || item.status === 'done') && item.transcriptPath).sort((a, b) => a.order - b.order);
     if (!done.length) return;
     const markdown = indexMarkdown({ title: job.batchTitle || job.title, lectures: done.map(item => ({ number: item.order, title: item.title, duration: item.transcript?.seconds, words: item.transcript?.words, transcript: path.basename(item.transcriptPath) })) });
     const target = path.join(job.destination, '00 - Index.md'), temporary = `${target}.partial`;

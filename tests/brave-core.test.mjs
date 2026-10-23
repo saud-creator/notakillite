@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import ffmpeg from 'ffmpeg-static';
-import { BraveConnector } from '../core/brave.mjs';
+import { BraveConnector, findBrave } from '../core/brave.mjs';
 import { CoreService } from '../core/service.mjs';
 import { pathsFor } from '../core/paths.mjs';
 import { runTool } from '../companion/audio.mjs';
@@ -62,7 +62,8 @@ test('a durable queued local job is recoverable and cancellation stops native pr
   } finally { if (!service.closing) await service.close(); }
 });
 
-test('Brave private pipe retains synthetic session state across three builds and exports full M4A without an extension', { timeout: 120000 }, async t => {
+const braveInstalled = await findBrave().then(() => true, () => false);
+test('Brave private pipe retains synthetic session state across three builds and exports full M4A without an extension', { timeout: 120000, skip: !braveInstalled && 'Brave Browser is not installed' }, async t => {
   const root = await directory(t, 'notakillite-brave-');
   const input = path.join(root, 'lecture.m4a');
   await runTool(ffmpeg, ['-y', '-i', fileURLToPath(new URL('./fixtures/spoken-lecture.wav', import.meta.url)), '-t', '3.137', '-c:a', 'aac', input]);
