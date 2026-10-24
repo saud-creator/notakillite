@@ -10,7 +10,7 @@
 # immediately while the outputs are current. Downloads are pinned by commit and checksum.
 set -euo pipefail
 
-STAMP_VERSION=2
+STAMP_VERSION=3
 RNNOISE_REPO=https://github.com/xiph/rnnoise
 RNNOISE_COMMIT=70f1d256acd4b34a572f999a05c87bf00b67730d
 RNNOISE_MODEL_SHA256=0a8755f8e2d834eff6a54714ecc7d75f9932e845df35f8b59bc52a7cfe6e8b37
@@ -58,6 +58,9 @@ for f in denoise.c rnn.c pitch.c kiss_fft.c celt_lpc.c nnet.c nnet_default.c par
   cp "$SRC/src/$f" "$RNN_DIR/"
 done
 for h in "$SRC"/src/*.h; do cp "$h" "$RNN_DIR/"; done
+# vec.h always includes x86/x86_arch_macros.h; it only defines SSE macros for MSVC, so it is harmless on ARM.
+mkdir -p "$RNN_DIR/x86"
+cp "$SRC/src/x86/x86_arch_macros.h" "$RNN_DIR/x86/"
 cp "$SRC/COPYING" "$RNN_DIR/LICENSE-RNNoise"
 
 echo "== DeepFilterNet 3"

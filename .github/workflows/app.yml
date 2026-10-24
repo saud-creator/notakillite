@@ -70,7 +70,7 @@ jobs:
             Packages/NoiseModels/Sources/CRNNoise
             Packages/NoiseModels/Sources/NoiseModels/Resources
             Packages/NoiseModels/TestAssets
-            Packages/NoiseModels/.built-v2
+            Packages/NoiseModels/.built-v3
           key: noise-models-${{ matrix.runner }}-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
 
       - name: Build the noise models (RNNoise, DeepFilterNet 3)
@@ -214,7 +214,7 @@ jobs:
             Packages/NoiseModels/Sources/CRNNoise
             Packages/NoiseModels/Sources/NoiseModels/Resources
             Packages/NoiseModels/TestAssets
-            Packages/NoiseModels/.built-v2
+            Packages/NoiseModels/.built-v3
           key: noise-models-macos-15-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
 
       - name: Build the noise models (RNNoise, DeepFilterNet 3)
