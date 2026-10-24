@@ -13,7 +13,7 @@ final class MockServer: @unchecked Sendable {
 
     struct Request {
         var url: String
-        var headers: [String: String]
+        var headers: [String: String]   // names in lower case: HTTP header names ignore case
         var fields: [(name: String, value: String)]
         var audioBytes: Int
 
@@ -40,7 +40,8 @@ final class MockServer: @unchecked Sendable {
     }
 
     func reply(to request: URLRequest, body: Data) -> Reply {
-        let parsed = Request(url: request.url?.absoluteString ?? "", headers: request.allHTTPHeaderFields ?? [:],
+        let headers = Dictionary((request.allHTTPHeaderFields ?? [:]).map { ($0.key.lowercased(), $0.value) }, uniquingKeysWith: { _, last in last })
+        let parsed = Request(url: request.url?.absoluteString ?? "", headers: headers,
                              fields: Self.fields(body, contentType: request.value(forHTTPHeaderField: "Content-Type") ?? ""),
                              audioBytes: Self.fileSize(body, contentType: request.value(forHTTPHeaderField: "Content-Type") ?? ""))
         lock.lock()
@@ -65,7 +66,7 @@ final class MockServer: @unchecked Sendable {
     }
 
     static func fileSize(_ body: Data, contentType: String) -> Int {
-        parts(body, contentType: contentType).first(where: \.isFile)?.data.count ?? 0
+        parts(body, contentType: contentType).first(where: { $0.isFile })?.data.count ?? 0
     }
 
     private static func parts(_ body: Data, contentType: String) -> [(name: String, isFile: Bool, data: Data)] {
@@ -169,7 +170,7 @@ final class CloudEngineTests: XCTestCase {
         let request = try XCTUnwrap(server.requests.first)
         XCTAssertEqual(server.requests.count, 1)
         XCTAssertEqual(request.url, "https://api.openai.com/v1/audio/transcriptions")
-        XCTAssertEqual(request.headers["Authorization"], "Bearer test-key")
+        XCTAssertEqual(request.headers["authorization"], "Bearer test-key")
         XCTAssertEqual(request.value("model"), "gpt-transcribe")
         XCTAssertEqual(request.values("languages[]"), ["ar", "en"], "automatic language means Arabic or English")
         XCTAssertEqual(request.values("keywords[]"), ["inguinal ligament", "cremaster", "paracentesis"])
@@ -239,7 +240,7 @@ final class CloudEngineTests: XCTestCase {
         let request = try XCTUnwrap(server.requests.first)
         XCTAssertEqual(request.url, "https://api.elevenlabs.io/v1/speech-to-text")
         XCTAssertEqual(request.headers["xi-api-key"], "test-key")
-        XCTAssertNil(request.headers["Authorization"])
+        XCTAssertNil(request.headers["authorization"])
         XCTAssertEqual(request.value("model_id"), "scribe_v2")
         XCTAssertEqual(request.value("timestamps_granularity"), "word")
         XCTAssertEqual(request.value("tag_audio_events"), "false")
@@ -275,7 +276,7 @@ final class CloudEngineTests: XCTestCase {
         let result = try await engine(.custom, model: "whisper-1", key: "", baseURL: "https://speech.example.com/v1/").transcribe([piece(2)], settings: DecodeSettings())
         XCTAssertEqual(server.requests.count, 4)
         XCTAssertEqual(server.requests[0].url, "https://speech.example.com/v1/audio/transcriptions")
-        XCTAssertNil(server.requests[0].headers["Authorization"], "no key, no Authorization header")
+        XCTAssertNil(server.requests[0].headers["authorization"], "no key, no Authorization header")
         XCTAssertEqual(result[0].segments.map(\.text), ["Done at last."])
     }
 

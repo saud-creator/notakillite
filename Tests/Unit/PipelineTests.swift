@@ -4,7 +4,8 @@ import XCTest
 /// The whole transcription pipeline with a scripted engine: loops are caught and repaired from the
 /// original audio, unfixable parts become visible markers, and an interrupted lecture resumes.
 final class PipelineTests: XCTestCase {
-    private let pattern = TestAudio.repeating(8, 2, count: 36)   // 6 minutes: 8 s "speech", 2 s pause
+    /// 7 minutes (8 s of "speech", 2 s pause), so the quality check has two parts: about 5 minutes and 2.
+    private let pattern = TestAudio.repeating(8, 2, count: 42)
 
     private func audio(cleanedLoops: Bool, originalLoops: Bool) throws -> PreparedAudio {
         let folder = TestAudio.folder()
@@ -22,12 +23,12 @@ final class PipelineTests: XCTestCase {
         XCTAssertEqual(result.quality.status, .ok)
         XCTAssertEqual(result.quality.attempts, 0)
         XCTAssertGreaterThan(result.words, 300)
-        XCTAssertEqual(result.duration, 360, accuracy: 0.1)
-        XCTAssertEqual(result.speechSeconds, 288, accuracy: 3, "pauses are not counted as speech")
+        XCTAssertEqual(result.duration, 420, accuracy: 0.1)
+        XCTAssertEqual(result.speechSeconds, 336, accuracy: 3, "pauses are not counted as speech")
         XCTAssertEqual(result.languages.keys.sorted(), ["ar", "en"])
         XCTAssertEqual(engine.settingsSeen.first?.language, nil, "Auto detects the language of every piece")
         for (a, b) in zip(result.segments, result.segments.dropFirst()) { XCTAssertLessThanOrEqual(a.start, b.start) }
-        XCTAssertTrue(result.segments.allSatisfy { $0.end <= 360.01 })
+        XCTAssertTrue(result.segments.allSatisfy { $0.end <= 420.01 })
     }
 
     func testRepetitionLoopIsRepairedFromTheOriginalAudio() async throws {
@@ -38,7 +39,7 @@ final class PipelineTests: XCTestCase {
         XCTAssertFalse(result.segments.contains { $0.text == loopSentence }, "no looped text is exported")
         XCTAssertFalse(result.segments.contains(where: \.marker))
         XCTAssertGreaterThan(result.words, 300)
-        XCTAssertTrue(TranscriptQuality.audit(result.segments, duration: 360).ok)
+        XCTAssertTrue(TranscriptQuality.audit(result.segments, duration: 420).ok)
     }
 
     func testUnfixablePartsBecomeVisibleMarkersInsteadOfGuesses() async throws {

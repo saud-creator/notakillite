@@ -116,7 +116,8 @@ actor WhisperEngine: SpeechEngine {
             } else {
                 stage("Downloading \(model.shortName) (one time)", 0)
                 folder = try await WhisperKit.download(variant: model.rawValue, downloadBase: Self.modelsFolder, progressCallback: { progress in
-                    stage("Downloading \(model.shortName) (one time) · \(Int(progress.fractionCompleted * 100))%", progress.fractionCompleted * 0.8)
+                    let fraction = progress.fractionCompleted.isFinite ? min(1, max(0, progress.fractionCompleted)) : 0
+                    stage("Downloading \(model.shortName) (one time) · \(Int(fraction * 100))%", fraction * 0.8)
                 })
             }
             stage("Preparing \(model.shortName) for the Neural Engine (slow only the first time)", 0.85)

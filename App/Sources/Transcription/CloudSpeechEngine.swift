@@ -160,14 +160,20 @@ final class CloudSpeechEngine: SpeechEngine, @unchecked Sendable {
             var next = 0
             while next < min(limit, pieces.count) {
                 let index = next
-                group.addTask { (index, try await self.transcribePiece(pieces[index], settings: settings)) }
+                group.addTask {
+                    let result = try await self.transcribePiece(pieces[index], settings: settings)
+                    return (index, result)
+                }
                 next += 1
             }
             while let finished = try await group.next() {
                 results[finished.0] = finished.1
                 if next < pieces.count {
                     let index = next
-                    group.addTask { (index, try await self.transcribePiece(pieces[index], settings: settings)) }
+                    group.addTask {
+                        let result = try await self.transcribePiece(pieces[index], settings: settings)
+                        return (index, result)
+                    }
                     next += 1
                 }
             }

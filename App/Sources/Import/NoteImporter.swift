@@ -124,9 +124,15 @@ enum NoteImporter {
         }
     }
 
+    private struct EnoughData: Error {}
+
+    /// The first 16 bytes of an entry (it stops reading there, so large recordings aren't unpacked twice).
     private static func prefix(of entry: Entry, in archive: Archive) throws -> Data {
         var data = Data()
-        _ = try? archive.extract(entry, bufferSize: 16 * 1024, skipCRC32: true) { chunk in if data.count < 16 { data.append(chunk.prefix(16 - data.count)) } }
+        _ = try? archive.extract(entry, bufferSize: 16 * 1024, skipCRC32: true) { chunk in
+            data.append(chunk.prefix(16 - data.count))
+            if data.count >= 16 { throw EnoughData() }
+        }
         return data
     }
 }

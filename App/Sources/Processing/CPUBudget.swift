@@ -6,7 +6,10 @@ import Foundation
 /// The system stops a background app that uses more than 80 % of one CPU core over 60 seconds (crash
 /// reports call this `cpu_resource_fatal`), even an app that is playing audio. So while the app is in
 /// the background, heavy work (noise removal, audio conversion, speech recognition) waits here whenever
-/// the whole app used more than `backgroundShare` of one core over the last `window` seconds. Work on
+/// the whole app used more than `backgroundShare` of one core over the last `window` seconds (to keep
+/// the pace even), or more than `backgroundShare` × 60 CPU seconds since the start of the last minute
+/// in the background (so long pieces of work can't add up to the system's limit: the most any minute
+/// can hold is the budget plus the longest single piece of work, and every piece is short). Work on
 /// the Neural Engine doesn't count as CPU time, so Whisper keeps most of its speed. In the foreground
 /// nothing is limited and every core is used.
 final class CPUBudget: @unchecked Sendable {
@@ -14,8 +17,10 @@ final class CPUBudget: @unchecked Sendable {
 
     /// Allowed average CPU use in the background, as a share of one core (the system's limit is 0.8).
     let backgroundShare: Double
-    /// Seconds over which the average is taken.
+    /// Seconds over which the short-term average is taken.
     let window: Double
+    /// Length of the system's measuring period (60 s; shorter in tests).
+    let minute: Double
 
     private struct Sample {
         var time: Double
@@ -28,9 +33,15 @@ final class CPUBudget: @unchecked Sendable {
     private var backgroundSince: Double?
     private var peak = 0.0
 
-    init(backgroundShare: Double = 0.45, window: Double = 10) {
+    /// The time and the app's CPU seconds so far (a fake clock in tests).
+    private let clock: @Sendable () -> (time: Double, cpu: Double)
+
+    init(backgroundShare: Double = 0.45, window: Double = 10, minute: Double = 60,
+         clock: @escaping @Sendable () -> (time: Double, cpu: Double) = { (CPUBudget.now(), CPUBudget.processCPUSeconds()) }) {
         self.backgroundShare = backgroundShare
         self.window = window
+        self.minute = minute
+        self.clock = clock
     }
 
     /// True while the app is in the background.
@@ -42,7 +53,7 @@ final class CPUBudget: @unchecked Sendable {
 
     /// Called when the app enters (true) or leaves (false) the background.
     func setLimited(_ value: Bool) {
-        let time = Self.now(), cpu = Self.processCPUSeconds()
+        let (time, cpu) = clock()
         lock.lock()
         defer { lock.unlock() }
         guard value != limited else { return }
@@ -66,14 +77,26 @@ final class CPUBudget: @unchecked Sendable {
     /// Average CPU use (share of one core) over about the last `seconds` (default: `window`).
     @discardableResult
     func share(over seconds: Double? = nil) -> Double {
-        let time = Self.now(), cpu = Self.processCPUSeconds()
+        let (time, cpu) = clock()
         lock.lock()
         defer { lock.unlock() }
         record(time: time, cpu: cpu)
         return average(from: time - (seconds ?? window), time: time, cpu: cpu, minimumSpan: 0.5)
     }
 
-    /// The highest one-minute average while in the background (reported by the automated test).
+    /// True while the app is in the background and has used up its CPU budget for now.
+    func isOverBudget() -> Bool {
+        let (time, cpu) = clock()
+        lock.lock()
+        defer { lock.unlock() }
+        record(time: time, cpu: cpu)
+        guard limited else { return false }
+        if average(from: time - window, time: time, cpu: cpu, minimumSpan: 0.5) > backgroundShare { return true }
+        return usedThisMinute(time: time, cpu: cpu) > backgroundShare * minute
+    }
+
+    /// The most CPU time used in any minute in the background, as a share of one core (reported by the
+    /// automated test; the system's limit is 0.8).
     var backgroundPeak: Double {
         lock.lock()
         defer { lock.unlock() }
@@ -82,14 +105,14 @@ final class CPUBudget: @unchecked Sendable {
 
     /// Waits (blocking the calling thread) while the background budget is used up. For worker threads.
     func throttle(cancelled: () -> Bool = { false }) {
-        while share() > backgroundShare && isLimited && !cancelled() {
+        while isOverBudget() && !cancelled() {
             Thread.sleep(forTimeInterval: 0.2)
         }
     }
 
     /// Waits while the background budget is used up. Throws if the task is cancelled.
     func pause() async throws {
-        while share() > backgroundShare && isLimited {
+        while isOverBudget() {
             try await Task.sleep(nanoseconds: 200_000_000)
         }
         try Task.checkCancellation()
@@ -100,10 +123,16 @@ final class CPUBudget: @unchecked Sendable {
     private func record(time: Double, cpu: Double) {
         if let last = samples.last, time - last.time < 0.1 { return }
         samples.append(Sample(time: time, cpu: cpu))
-        while let first = samples.first, time - first.time > 90 { samples.removeFirst() }
-        if limited, let since = backgroundSince, time - since >= 5 {
-            peak = max(peak, average(from: max(since, time - 60), time: time, cpu: cpu, minimumSpan: 5))
-        }
+        while samples.count > 2, let first = samples.first, time - first.time > minute * 1.5 { samples.removeFirst() }
+        if limited { peak = max(peak, usedThisMinute(time: time, cpu: cpu) / minute) }
+    }
+
+    /// CPU seconds used in the background during the last `minute` (from the newest sample taken at or
+    /// before its start, so never less than the real use).
+    private func usedThisMinute(time: Double, cpu: Double) -> Double {
+        let start = max(backgroundSince ?? time, time - minute)
+        guard let reference = samples.last(where: { $0.time <= start }) ?? samples.first else { return 0 }
+        return max(0, cpu - reference.cpu)
     }
 
     /// Average from the newest sample taken at or before `start` (or the oldest one) until now.

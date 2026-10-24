@@ -103,7 +103,7 @@ struct TranscriptionPipeline {
 
                 var tries = 0
                 for strategy in strategies {
-                    if tries >= options.maxAttemptsPerPart || spent + piece.range.length > budget { break }
+                    if tries >= options.maxAttemptsPerPart || spent + piece.range.length > budget + 1 { break }   // + 1 s: rounding
                     tries += 1; attempts += 1
                     spent += piece.range.length
                     stage("Checking quality · re-transcribing part \(n + 1) of \(failing.count) (\(strategy.name))", 0.8 + 0.18 * Double(n) / Double(failing.count))

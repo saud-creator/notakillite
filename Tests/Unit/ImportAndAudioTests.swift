@@ -53,18 +53,17 @@ final class ImportAndAudioTests: XCTestCase {
         }
     }
 
-    func testAudioIsDecodedCleanedAndResampledTo16kHz() async throws {
+    /// Decoding, the filters and 16 kHz output for the modes without a neural network. (The tone
+    /// below isn't a real voice, and the neural models are right to treat it as noise; they get real
+    /// speech in the next test.)
+    func testAudioIsDecodedFilteredAndResampledTo16kHz() async throws {
         let folder = TestAudio.folder()
         let input = folder.appendingPathComponent("lecture.wav")
         // 44.1 kHz with background hiss, like a phone recording.
         let duration = try TestAudio.writeSpeechLike(input, pattern: [(3, 1), (3, 1)], amplitude: 0.4, rate: 44_100, noise: 0.01)
-        for mode in CleanupMode.allCases {
+        for mode in CleanupMode.allCases where mode.neuralModel == nil {
             let audio = try await AudioPreparer.prepare(input: input, mode: mode, keepCleanedAudio: true, folder: folder.appendingPathComponent(mode.rawValue)) { _ in }
             print("\(mode.rawValue): \(audio.cleanupLabel)")
-            if mode.neuralModel != nil {
-                XCTAssertTrue(audio.cleanupLabel.hasPrefix(mode.shortLabel), "the built-in model ran: \(audio.cleanupLabel)")
-                XCTAssertTrue(audio.cleanupLabel.contains("dB lower"), "the hiss was removed: \(audio.cleanupLabel)")
-            }
             XCTAssertEqual(audio.duration, duration, accuracy: 0.05, mode.rawValue)
             let speech = try AVAudioFile(forReading: audio.speech)
             XCTAssertEqual(speech.fileFormat.sampleRate, 16_000)
@@ -79,6 +78,43 @@ final class ImportAndAudioTests: XCTestCase {
                 XCTAssertEqual(analysis.speechSeconds, 6, accuracy: 1.0, "\(mode.rawValue): \(audio.cleanupLabel)")
             }
             XCTAssertFalse(audio.cleanupLabel.isEmpty)
+        }
+    }
+
+    /// DeepFilterNet and RNNoise inside the whole preparation: real speech (from DeepFilterNet's test
+    /// recordings) at 44.1 kHz with hiss under it, as a phone might record a lecture.
+    func testNeuralCleanupInsideThePreparation() async throws {
+        guard let assets = ProcessInfo.processInfo.environment["MENTALITY_NOISE_ASSETS"], !assets.isEmpty else {
+            throw XCTSkip("Set MENTALITY_NOISE_ASSETS (the CI workflow does) to test the noise models on real speech.")
+        }
+        let voice = try NoiseModelTests.read48k(URL(fileURLWithPath: assets).appendingPathComponent("clean_freesound_33711.wav"))
+        let speech = TestAudio.resample(voice, from: 48_000, to: 44_100)
+        let pause = [Float](repeating: 0, count: 88_200)
+        var seed: UInt32 = 7
+        let samples = (speech + pause + speech + pause).map { value -> Float in
+            seed = seed &* 1_103_515_245 &+ 12345
+            return value + (Float(seed % 2000) / 1000 - 1) * 0.01
+        }
+        let folder = TestAudio.folder()
+        let input = folder.appendingPathComponent("phone-recording.wav")
+        try TestAudio.write(samples, rate: 44_100, to: input)
+        let duration = Double(samples.count) / 44_100, spoken = 2 * Double(speech.count) / 44_100
+
+        for mode in CleanupMode.allCases where mode.neuralModel != nil {
+            let audio = try await AudioPreparer.prepare(input: input, mode: mode, keepCleanedAudio: true, folder: folder.appendingPathComponent(mode.rawValue)) { _ in }
+            print("\(mode.rawValue): \(audio.cleanupLabel)")
+            XCTAssertTrue(audio.cleanupLabel.hasPrefix(mode.shortLabel), "the built-in model ran: \(audio.cleanupLabel)")
+            XCTAssertTrue(audio.cleanupLabel.contains("dB lower"), "the hiss was removed: \(audio.cleanupLabel)")
+            XCTAssertNotEqual(audio.speech, audio.original, "the cleaned audio goes to speech recognition")
+            XCTAssertNotNil(audio.cleanedM4A)
+            XCTAssertEqual(audio.duration, duration, accuracy: 0.05, mode.rawValue)
+            let file = try AVAudioFile(forReading: audio.speech)
+            XCTAssertEqual(file.fileFormat.sampleRate, 16_000)
+            XCTAssertEqual(file.fileFormat.channelCount, 1)
+            XCTAssertEqual(Double(file.length) / 16_000, duration, accuracy: 0.1, mode.rawValue)
+            let analysis = try SpeechDetector.analyze(audio.speech)
+            XCTAssertGreaterThan(analysis.speechSeconds, spoken * 0.5, "\(mode.rawValue): the voice is still there")
+            XCTAssertLessThan(analysis.speechSeconds, duration, mode.rawValue)
         }
     }
 

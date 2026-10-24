@@ -40,6 +40,28 @@ enum TestAudio {
 
     static func repeating(_ tone: Double, _ silence: Double, count: Int) -> [(Double, Double)] { Array(repeating: (tone, silence), count: count) }
 
+    /// Writes samples as a 16-bit mono WAV file.
+    static func write(_ samples: [Float], rate: Double, to url: URL) throws {
+        let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: rate, channels: 1, interleaved: true)!
+        let file = try AVAudioFile(forWriting: url, settings: format.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(samples.count)))
+        buffer.frameLength = AVAudioFrameCount(samples.count)
+        samples.withUnsafeBufferPointer { buffer.floatChannelData![0].update(from: $0.baseAddress!, count: samples.count) }
+        try file.write(from: buffer)
+    }
+
+    /// Changes the sample rate by linear interpolation (good enough for test recordings).
+    static func resample(_ samples: [Float], from source: Double, to target: Double) -> [Float] {
+        guard !samples.isEmpty else { return [] }
+        let count = Int(Double(samples.count) * target / source)
+        return (0..<count).map { i in
+            let position = Double(i) * source / target
+            let index = min(Int(position), samples.count - 1), next = min(index + 1, samples.count - 1)
+            let fraction = Float(position - Double(index))
+            return samples[index] + (samples[next] - samples[index]) * fraction
+        }
+    }
+
     static func fixture(_ name: String, _ ext: String) throws -> URL {
         try XCTUnwrap(Bundle(for: BundleToken.self).url(forResource: name, withExtension: ext), "missing fixture \(name).\(ext)")
     }
@@ -72,7 +94,7 @@ enum FakeText {
 
 /// A speech engine scripted by the audio it receives: loud pieces "loop", quiet pieces are fine.
 final class FakeEngine: SpeechEngine, @unchecked Sendable {
-    var loopAbove: Float = 0.45
+    var loopAbove: Float = 0.3   // the loud test tone peaks at 0.42, the quiet one at 0.21
     var calls = 0
     var piecesSeen = 0
     var failAfterCalls: Int?

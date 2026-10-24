@@ -111,7 +111,7 @@ final class AutoTestReporter {
                 "title": lecture.displayTitle,
                 "status": lecture.status.rawValue,
                 "phase": lecture.phase,
-                "progress": lecture.progress,
+                "progress": Self.finite(lecture.progress),
                 "words": lecture.words,
                 "files": library.outputURLs(lecture).map(\.path),
             ]
@@ -126,15 +126,20 @@ final class AutoTestReporter {
             "running": library.isRunning,
             "keepAlive": BackgroundKeeper.shared.status,
             "cpu": [
-                "recent": budget.share(),
-                "backgroundPeak": budget.backgroundPeak,
+                "recent": Self.finite(budget.share()),
+                "backgroundPeak": Self.finite(budget.backgroundPeak),
                 "limit": budget.backgroundShare,
                 "limited": budget.isLimited,
             ] as [String: Any],
             "lectures": lectures,
             "message": library.message ?? "",
         ]
-        guard let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) else { return }
+        // JSONSerialization raises an exception (it doesn't throw) on anything it can't write.
+        guard JSONSerialization.isValidJSONObject(status),
+              let data = try? JSONSerialization.data(withJSONObject: status, options: [.prettyPrinted, .sortedKeys]) else { return }
         try? data.write(to: file, options: .atomic)
     }
+
+    /// JSON has no NaN or infinity.
+    private static func finite(_ value: Double) -> Double { value.isFinite ? value : 0 }
 }

@@ -215,4 +215,58 @@ final class CPUBudgetTests: XCTestCase {
         budget.setLimited(false)
         XCTAssertFalse(budget.isLimited)
     }
+
+    /// iPadOS stops a background app that uses more than 80 % of one core over 60 seconds. Fifteen
+    /// simulated minutes in the background, with one or two workers doing pieces of work of different
+    /// lengths and asking the limiter before each piece, the way the app's workers do (and every 0.2 s
+    /// while the budget is used up): no minute may hold more than the budget plus the pieces in
+    /// progress, so none comes near the system's limit, and the work keeps moving at about the
+    /// budget's pace.
+    func testNoMinuteInTheBackgroundComesNearTheSystemLimit() {
+        let cases: [[Double]] = [[0.2], [1], [2], [5], [10], [15], [2, 0.1], [5, 0.5], [10, 0.05]]
+        for pieces in cases {
+            let clock = FakeClock()
+            let budget = CPUBudget(backgroundShare: 0.45, window: 10, minute: 60, clock: { [clock] in (clock.time, clock.cpu) })
+            budget.setLimited(true)
+            let step = 0.05, steps = Int((900 / step).rounded())
+            var busyUntil = [Double](repeating: 0, count: pieces.count)
+            var nextCheck = [Double](repeating: 0, count: pieces.count)
+            var used: [Double] = []   // CPU seconds used in each step
+            used.reserveCapacity(steps)
+            for k in 0..<steps {
+                clock.time = Double(k) * step
+                for worker in pieces.indices where busyUntil[worker] <= clock.time + 1e-9 && nextCheck[worker] <= clock.time + 1e-9 {
+                    if budget.isOverBudget() {
+                        nextCheck[worker] = clock.time + 0.2
+                    } else {
+                        busyUntil[worker] = clock.time + pieces[worker]
+                    }
+                }
+                let busy = Double(busyUntil.filter { $0 > clock.time + 1e-9 }.count) * step
+                used.append(busy)
+                clock.cpu += busy
+            }
+            // The busiest minute, exactly: a sliding sum over 60 seconds.
+            let perMinute = Int((60 / step).rounded())
+            var sum = used[0..<perMinute].reduce(0, +)
+            var busiest = sum
+            for i in perMinute..<used.count {
+                sum += used[i] - used[i - perMinute]
+                busiest = max(busiest, sum)
+            }
+            let worst = busiest / 60, average = clock.cpu / 900
+            let label = "pieces of \(pieces) s"
+            print("CPU limiter, \(label): busiest minute \(Int((worst * 100).rounded())) %, average \(Int((average * 100).rounded())) %, reported peak \(Int((budget.backgroundPeak * 100).rounded())) %")
+            XCTAssertLessThanOrEqual(worst, 0.45 + pieces.reduce(0, +) / 60 + 0.01, label)
+            XCTAssertLessThan(worst, 0.7, "\(label): far from the system's 80 %")
+            XCTAssertGreaterThan(average, 0.35, "\(label): the work keeps moving")
+            XCTAssertGreaterThanOrEqual(budget.backgroundPeak, worst - 0.01, "\(label): the reported peak is not lower than the real one")
+        }
+    }
+}
+
+/// Time and CPU seconds for the limiter that move only when a test moves them.
+private final class FakeClock: @unchecked Sendable {
+    var time = 0.0
+    var cpu = 0.0
 }
