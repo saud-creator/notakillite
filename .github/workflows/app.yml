@@ -1,14 +1,15 @@
 name: App
 
 # Builds Mentality and tests it on two simulated devices:
-#   - iPad Pro (M4) on iPadOS 18, built with Xcode 16 (the iPadOS 18 SDK); this job also makes the IPA.
+#   - iPad Pro (M4) on iPadOS 18, built with Xcode 16 (the iPadOS 18 SDK).
 #   - iPhone 15 Pro on iOS 27, built with Xcode 27.
 # Each job runs the unit and end-to-end tests (real speech through the noise models and Whisper),
 # then drives the app: screens and settings, and lectures processed after pressing Home.
+# A separate job builds the unsigned IPA, so it is ready without waiting for the tests.
 
 on:
   push:
-    branches: [main]
+    branches: [main, mentality]
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -25,8 +26,6 @@ jobs:
     name: ${{ matrix.title }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 180
-    permissions:
-      contents: write   # attach the IPA to a release on version tags
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +38,6 @@ jobs:
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
             full_models: "1"
-            ipa: true
           - id: iphone-15-pro-ios27
             title: iPhone 15 Pro · iOS 27
             runner: xcode-27
@@ -48,7 +46,6 @@ jobs:
             prefer: iPhone 15 Pro
             create: com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro
             full_models: "0"
-            ipa: false
     steps:
       - uses: actions/checkout@v4
 
@@ -177,27 +174,6 @@ jobs:
             bash ci/screenshot.sh "$SIM" "$APP" "$OUT/screenshots/${{ matrix.id }}-8-dark.png" dark
           fi
 
-      - name: Build the unsigned IPA (iPhone and iPad, iOS 18 and later)
-        if: matrix.ipa
-        run: |
-          set -o pipefail
-          xcodebuild archive -project Mentality.xcodeproj -scheme Mentality -configuration Release \
-            -clonedSourcePackagesDirPath build/spm -skipPackagePluginValidation -skipMacroValidation \
-            -destination 'generic/platform=iOS' -archivePath build/Mentality.xcarchive \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -5
-          mkdir -p build/ipa/Payload
-          cp -R build/Mentality.xcarchive/Products/Applications/Mentality.app build/ipa/Payload/
-          (cd build/ipa && zip -qry ../Mentality-unsigned.ipa Payload)
-          plutil -p build/ipa/Payload/Mentality.app/Info.plist | grep -E "MinimumOSVersion|DTSDKName|UIDeviceFamily|UIBackgroundModes" -A2
-          ls -lh build/Mentality-unsigned.ipa
-
-      - name: Upload the IPA
-        if: matrix.ipa
-        uses: actions/upload-artifact@v4
-        with:
-          name: Mentality-unsigned-ipa
-          path: build/Mentality-unsigned.ipa
-
       - name: Upload screenshots, transcripts and test logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -214,8 +190,88 @@ jobs:
           name: xcresult-${{ matrix.id }}
           path: build/*.xcresult
 
+  ipa:
+    name: IPA (unsigned, iPad and iPhone)
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: write   # attach the IPA to a release on version tags
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode 16 (the iPadOS 18 SDK)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
+
+      - name: Cache the noise models
+        id: noise-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/NoiseModels/DeepFilter.xcframework
+            Packages/NoiseModels/Sources/CRNNoise
+            Packages/NoiseModels/Sources/NoiseModels/Resources
+            Packages/NoiseModels/TestAssets
+            Packages/NoiseModels/.built-v2
+          key: noise-models-macos-15-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
+
+      - name: Build the noise models (RNNoise, DeepFilterNet 3)
+        if: steps.noise-cache.outputs.cache-hit != 'true'
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup update stable --no-self-update
+          rustup default stable
+          rustc --version
+          bash scripts/build-noise-models.sh
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: build/spm
+          key: spm-macos-15-${{ hashFiles('project.yml') }}
+
+      - name: Build the unsigned IPA (iPhone and iPad, iOS 18 and later)
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild archive -project Mentality.xcodeproj -scheme Mentality -configuration Release \
+            -clonedSourcePackagesDirPath build/spm -skipPackagePluginValidation -skipMacroValidation \
+            -destination 'generic/platform=iOS' -archivePath build/Mentality.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee build/archive.log | grep -E "error:|\*\* .*(SUCCEEDED|FAILED) \*\*" || true
+          grep -q "\*\* ARCHIVE SUCCEEDED \*\*" build/archive.log
+          mkdir -p build/ipa/Payload
+          cp -R build/Mentality.xcarchive/Products/Applications/Mentality.app build/ipa/Payload/
+          (cd build/ipa && zip -qry ../Mentality-unsigned.ipa Payload)
+          plutil -p build/ipa/Payload/Mentality.app/Info.plist | grep -E "MinimumOSVersion|DTSDKName|UIDeviceFamily|UIBackgroundModes" -A2
+          ls -lh build/Mentality-unsigned.ipa
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mentality-unsigned-ipa
+          path: build/Mentality-unsigned.ipa
+
+      - name: Upload the build log (when the build failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipa-build-log
+          path: build/archive.log
+
       - name: Attach the IPA to the release
-        if: matrix.ipa && startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
