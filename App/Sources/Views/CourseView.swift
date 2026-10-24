@@ -13,7 +13,7 @@ struct CourseView: View {
                     LectureRow(lecture: lecture, preview: $preview)
                 }
             } footer: {
-                Text("Files are in Files → On My iPad → Mentality → Lectures → \(course.folderName).")
+                Text("Files are in Files → On My \(DeviceInfo.kind) → Mentality → Lectures → \(course.folderName).")
             }
         }
         .navigationTitle(course.title)
@@ -21,6 +21,8 @@ struct CourseView: View {
             ToolbarItemGroup(placement: .primaryAction) {
                 if library.isRunning {
                     Button(role: .destructive) { library.cancelAll() } label: { Label("Stop all", systemImage: "stop.circle") }
+                } else if library.lectures(in: course).contains(where: { $0.status == .queued }) {
+                    Button { library.start() } label: { Label("Start", systemImage: "play.circle") }
                 }
                 let files = library.allOutputs(course)
                 if !files.isEmpty {
@@ -63,11 +65,17 @@ struct LectureRow: View {
                 }
                 if lecture.status == .queued || lecture.isActive { Button("Cancel", role: .destructive) { library.cancel(lecture.id) } }
                 if lecture.status == .failed || lecture.status == .cancelled { Button("Retry") { library.retry(lecture.id) } }
-                if lecture.isFinished { Button("Redo") { library.redo(lecture.id) } }
                 Spacer()
                 if !lecture.isActive {
-                    Button(role: .destructive) { library.delete(lecture) } label: { Image(systemName: "trash") }
-                        .accessibilityLabel("Delete lecture")
+                    Menu {
+                        if lecture.isFinished {
+                            Button { library.redo(lecture.id) } label: { Label("Transcribe again", systemImage: "arrow.clockwise") }
+                        }
+                        Button(role: .destructive) { library.delete(lecture) } label: { Label("Delete lecture", systemImage: "trash") }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("More actions")
                 }
             }
             .buttonStyle(.borderless)

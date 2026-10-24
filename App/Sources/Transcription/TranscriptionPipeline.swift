@@ -57,6 +57,7 @@ struct TranscriptionPipeline {
             let batch = Array(todo[index..<min(index + options.batchSize, todo.count)])
             let doneSoFar = chunks.count - todo.count + index
             stage("Transcribing \(percent(doneSoFar, chunks.count))", 0.02 + 0.78 * Double(doneSoFar) / Double(max(1, chunks.count)))
+            try await CPUBudget.shared.pause()   // in the background, wait while the CPU budget is used up
             let samples = try batch.map { try AudioSamples.read(audio.speech, range: chunks[$0]) }
             let out = try await engine.transcribe(samples, settings: settings)
             for (n, chunkIndex) in batch.enumerated() where n < out.count { results[chunkIndex] = out[n] }
@@ -109,6 +110,7 @@ struct TranscriptionPipeline {
                     let ranges = SpeechDetector.chunks(speech: partKeep.map { TimeRange(start: max($0.start, piece.start), end: min($0.end, piece.end)) },
                                                        levels: analysis.levels, duration: piece.end, maxSeconds: strategy.maxSeconds)
                         .filter { $0.start >= piece.start }
+                    try await CPUBudget.shared.pause()
                     let samples = try ranges.map { try AudioSamples.read(strategy.source, range: $0) }
                     let out = try await engine.transcribe(samples, settings: strategy.settings)
                     var removed = 0

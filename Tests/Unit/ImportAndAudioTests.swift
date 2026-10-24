@@ -53,13 +53,18 @@ final class ImportAndAudioTests: XCTestCase {
         }
     }
 
-    func testAudioIsDecodedCleanedAndResampledTo16kHz() throws {
+    func testAudioIsDecodedCleanedAndResampledTo16kHz() async throws {
         let folder = TestAudio.folder()
         let input = folder.appendingPathComponent("lecture.wav")
         // 44.1 kHz with background hiss, like a phone recording.
         let duration = try TestAudio.writeSpeechLike(input, pattern: [(3, 1), (3, 1)], amplitude: 0.4, rate: 44_100, noise: 0.01)
         for mode in CleanupMode.allCases {
-            let audio = try AudioPreparer.prepare(input: input, mode: mode, keepCleanedAudio: true, folder: folder.appendingPathComponent(mode.rawValue)) { _ in }
+            let audio = try await AudioPreparer.prepare(input: input, mode: mode, keepCleanedAudio: true, folder: folder.appendingPathComponent(mode.rawValue)) { _ in }
+            print("\(mode.rawValue): \(audio.cleanupLabel)")
+            if mode.neuralModel != nil {
+                XCTAssertTrue(audio.cleanupLabel.hasPrefix(mode.shortLabel), "the built-in model ran: \(audio.cleanupLabel)")
+                XCTAssertTrue(audio.cleanupLabel.contains("dB lower"), "the hiss was removed: \(audio.cleanupLabel)")
+            }
             XCTAssertEqual(audio.duration, duration, accuracy: 0.05, mode.rawValue)
             let speech = try AVAudioFile(forReading: audio.speech)
             XCTAssertEqual(speech.fileFormat.sampleRate, 16_000)

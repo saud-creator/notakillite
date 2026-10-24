@@ -1,0 +1,224 @@
+name: App
+
+# Builds Mentality and tests it on two simulated devices:
+#   - iPad Pro (M4) on iPadOS 18, built with Xcode 16 (the iPadOS 18 SDK); this job also makes the IPA.
+#   - iPhone 15 Pro on iOS 27, built with Xcode 27.
+# Each job runs the unit and end-to-end tests (real speech through the noise models and Whisper),
+# then drives the app: screens and settings, and lectures processed after pressing Home.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  device:
+    name: ${{ matrix.title }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    permissions:
+      contents: write   # attach the IPA to a release on version tags
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ipad-pro-m4-ipados18
+            title: iPad Pro M4 · iPadOS 18
+            runner: macos-15
+            xcode: "16"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+            full_models: "1"
+            ipa: true
+          - id: iphone-15-pro-ios27
+            title: iPhone 15 Pro · iOS 27
+            runner: xcode-27
+            xcode: ""         # the image's own Xcode 27
+            os: "27"
+            prefer: iPhone 15 Pro
+            create: com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro
+            full_models: "0"
+            ipa: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode and simulator runtimes
+        run: |
+          if [ -n "${{ matrix.xcode }}" ]; then
+            XCODE=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app 2>/dev/null | sort -V | tail -1)
+            if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          fi
+          xcodebuild -version
+          sw_vers -productVersion
+          echo "CPU: $(sysctl -n machdep.cpu.brand_string), $(sysctl -n hw.ncpu) cores, $(( $(sysctl -n hw.memsize) / 1073741824 )) GB"
+          xcrun simctl list runtimes | grep -i ios
+          echo "OUT=$GITHUB_WORKSPACE/build/out" >> "$GITHUB_ENV"
+
+      - name: Cache the noise models
+        id: noise-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/NoiseModels/DeepFilter.xcframework
+            Packages/NoiseModels/Sources/CRNNoise
+            Packages/NoiseModels/Sources/NoiseModels/Resources
+            Packages/NoiseModels/TestAssets
+            Packages/NoiseModels/.built-v2
+          key: noise-models-${{ matrix.runner }}-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
+
+      - name: Build the noise models (RNNoise, DeepFilterNet 3)
+        if: steps.noise-cache.outputs.cache-hit != 'true'
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup update stable --no-self-update
+          rustup default stable
+          rustc --version
+          bash scripts/build-noise-models.sh
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: build/spm
+          key: spm-${{ matrix.runner }}-${{ hashFiles('project.yml') }}
+
+      - name: Cache the Whisper test model
+        uses: actions/cache@v4
+        with:
+          path: ~/mentality-models
+          key: whisper-base-v1
+
+      - name: Sound output for the background test
+        run: bash ci/ensure-audio-output.sh
+
+      - name: Simulator · ${{ matrix.title }}
+        run: |
+          SIM=$(python3 ci/pick-simulator.py --os "${{ matrix.os }}" --prefer "${{ matrix.prefer }}" --create "${{ matrix.create }}")
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIM" -b
+          echo "Model identifier: $(xcrun simctl getenv "$SIM" SIMULATOR_MODEL_IDENTIFIER 2>/dev/null || echo unknown)"
+          xcrun simctl list devices | grep "$SIM"
+
+      - name: Spoken test lectures
+        run: bash ci/make-speech.sh "$RUNNER_TEMP/speech" | grep -E '^[A-Z_]+=' | tee -a "$GITHUB_ENV"
+
+      - name: Build the app and the tests
+        id: build
+        run: |
+          set -o pipefail
+          mkdir -p build "$OUT"
+          xcodebuild build-for-testing -project Mentality.xcodeproj -scheme Mentality \
+            -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
+            -skipPackagePluginValidation -skipMacroValidation CODE_SIGNING_ALLOWED=NO \
+            | tee build/build.log | grep -E "error:|warning: .*/(App|Tests)/|\*\* .*(SUCCEEDED|FAILED) \*\*" || true
+          grep -q "\*\* TEST BUILD SUCCEEDED \*\*" build/build.log
+
+      - name: Unit and end-to-end tests
+        env:
+          TEST_RUNNER_MENTALITY_E2E_OUT: ${{ github.workspace }}/build/out/transcripts
+          TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
+          TEST_RUNNER_MENTALITY_NOISE_ASSETS: ${{ github.workspace }}/Packages/NoiseModels/TestAssets
+          TEST_RUNNER_MENTALITY_DEVICE_LABEL: ${{ matrix.id }}
+          TEST_RUNNER_MENTALITY_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TEST_RUNNER_MENTALITY_GROQ_KEY: ${{ secrets.GROQ_API_KEY }}
+          TEST_RUNNER_MENTALITY_ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Mentality.xcodeproj -scheme Mentality \
+            -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
+            -only-testing:MentalityTests -parallel-testing-enabled NO -resultBundlePath build/unit.xcresult \
+            | tee build/unit.log | grep -iE "error:|Test case '.*' (passed|failed|skipped)|Executed|\*\* TEST" || true
+          grep -qE "\*\* TEST (EXECUTE )?SUCCEEDED \*\*" build/unit.log
+
+      - name: App tests · screens, and lectures processed in the background
+        if: (success() || failure()) && steps.build.outcome == 'success'
+        env:
+          TEST_RUNNER_MENTALITY_UI_OUT: ${{ github.workspace }}/build/out
+          TEST_RUNNER_MENTALITY_DEVICE_LABEL: ${{ matrix.id }}
+          TEST_RUNNER_MENTALITY_EXPECT_FULL_MODELS: ${{ matrix.full_models }}
+          TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Mentality.xcodeproj -scheme Mentality \
+            -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
+            -only-testing:MentalityUITests -parallel-testing-enabled NO -resultBundlePath build/ui.xcresult \
+            | tee build/ui.log | grep -iE "error:|Test case '.*' (passed|failed|skipped)|Executed|\*\* TEST| s: app " || true
+          grep -qE "\*\* TEST (EXECUTE )?SUCCEEDED \*\*" build/ui.log
+
+      - name: Results
+        if: always()
+        run: bash ci/summary.sh "${{ matrix.title }}" "$OUT" build/unit.log build/ui.log
+
+      - name: Dark mode screenshot (sample data)
+        if: always()
+        continue-on-error: true
+        run: |
+          APP=build/dd/Build/Products/Debug-iphonesimulator/Mentality.app
+          if [ -d "$APP" ] && [ -n "${SIM:-}" ]; then
+            bash ci/screenshot.sh "$SIM" "$APP" "$OUT/screenshots/${{ matrix.id }}-8-dark.png" dark
+          fi
+
+      - name: Build the unsigned IPA (iPhone and iPad, iOS 18 and later)
+        if: matrix.ipa
+        run: |
+          set -o pipefail
+          xcodebuild archive -project Mentality.xcodeproj -scheme Mentality -configuration Release \
+            -clonedSourcePackagesDirPath build/spm -skipPackagePluginValidation -skipMacroValidation \
+            -destination 'generic/platform=iOS' -archivePath build/Mentality.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -5
+          mkdir -p build/ipa/Payload
+          cp -R build/Mentality.xcarchive/Products/Applications/Mentality.app build/ipa/Payload/
+          (cd build/ipa && zip -qry ../Mentality-unsigned.ipa Payload)
+          plutil -p build/ipa/Payload/Mentality.app/Info.plist | grep -E "MinimumOSVersion|DTSDKName|UIDeviceFamily|UIBackgroundModes" -A2
+          ls -lh build/Mentality-unsigned.ipa
+
+      - name: Upload the IPA
+        if: matrix.ipa
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mentality-unsigned-ipa
+          path: build/Mentality-unsigned.ipa
+
+      - name: Upload screenshots, transcripts and test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-${{ matrix.id }}
+          path: |
+            build/out
+            build/*.log
+
+      - name: Upload test result bundles (when something failed)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcresult-${{ matrix.id }}
+          path: build/*.xcresult
+
+      - name: Attach the IPA to the release
+        if: matrix.ipa && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Mentality $GITHUB_REF_NAME" \
+            --notes "Unsigned build for iPad and iPhone (iPadOS/iOS 18 and later). Install it with Sideloadly or AltStore, see the README."
+          gh release upload "$GITHUB_REF_NAME" build/Mentality-unsigned.ipa --clobber

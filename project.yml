@@ -1,4 +1,4 @@
-# Generates Mentality.xcodeproj:  brew install xcodegen && xcodegen generate
+# Generates Mentality.xcodeproj:  bash scripts/build-noise-models.sh && brew install xcodegen && xcodegen generate
 name: Mentality
 options:
   bundleIdPrefix: com.saudcreator
@@ -13,13 +13,16 @@ packages:
   ZIPFoundation:
     url: https://github.com/weichsel/ZIPFoundation
     exactVersion: 0.9.20
+  # RNNoise and DeepFilterNet 3, built by scripts/build-noise-models.sh
+  NoiseModels:
+    path: Packages/NoiseModels
 
 settings:
   base:
     SWIFT_VERSION: "5.0"
     SWIFT_STRICT_CONCURRENCY: minimal
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "2"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
@@ -32,10 +35,11 @@ targets:
       - package: WhisperKit
         product: WhisperKit
       - package: ZIPFoundation
+      - package: NoiseModels
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.saudcreator.mentality
-        TARGETED_DEVICE_FAMILY: "2"          # iPad only
+        TARGETED_DEVICE_FAMILY: "1,2"        # iPhone and iPad
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
     info:
@@ -43,14 +47,15 @@ targets:
       properties:
         CFBundleDisplayName: Mentality
         UILaunchScreen: {}
-        # Keep processing after leaving the app on iPadOS 18 (silent mixable audio session).
+        # Keep processing after leaving the app (silent mixable audio session, see BackgroundKeeper).
         UIBackgroundModes: [audio]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
         UIRequiresFullScreen: false
-        # Show Documents (transcripts) in Files → On My iPad → Mentality.
+        # Show Documents (transcripts) in Files → On My iPad / On My iPhone → Mentality.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationPortrait, UIInterfaceOrientationPortraitUpsideDown, UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
         # "Open in Mentality" for Notability .note exports, ZIPs and audio.
         CFBundleDocumentTypes:
@@ -81,7 +86,21 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.saudcreator.mentality.tests
-        TARGETED_DEVICE_FAMILY: "2"
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  # Drives the app on the simulator: screens, and processing in the background after pressing Home.
+  MentalityUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [Tests/UI]
+    dependencies:
+      - target: Mentality
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.saudcreator.mentality.uitests
+        TARGETED_DEVICE_FAMILY: "1,2"
+        TEST_TARGET_NAME: Mentality
 
 schemes:
   Mentality:
@@ -89,5 +108,6 @@ schemes:
       targets:
         Mentality: all
         MentalityTests: [test]
+        MentalityUITests: [test]
     test:
-      targets: [MentalityTests]
+      targets: [MentalityTests, MentalityUITests]

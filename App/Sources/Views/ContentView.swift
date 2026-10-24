@@ -21,6 +21,7 @@ struct DroppedFile: Transferable {
 /// Sidebar of imports (courses) beside the selected course's lectures.
 struct ContentView: View {
     @EnvironmentObject private var library: LibraryModel
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var importing = false
     @State private var showingSettings = false
     @State private var selection: UUID?
@@ -51,7 +52,8 @@ struct ContentView: View {
         } isTargeted: { dropTargeted = $0 }
         .overlay { if dropTargeted { DropHint() } }
         .onChange(of: library.courses.first?.id) { _, newest in if let newest { selection = newest } }
-        .onAppear { if selection == nil { selection = library.courses.first?.id } }
+        // On iPad, open the newest import beside the list. On iPhone the list comes first.
+        .onAppear { if selection == nil && sizeClass == .regular { selection = library.courses.first?.id } }
     }
 
     private var sidebar: some View {
@@ -59,7 +61,7 @@ struct ContentView: View {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Lecture recordings in. Exam-ready text out.").font(.headline)
-                    Text("Import Notability notes (.note), audio files or whole folders. Noise and silence are removed, Arabic and English speech is transcribed on this iPad, and every lecture becomes one file for your AI.")
+                    Text("Import Notability notes (.note), audio files or whole folders. Noise and silence are removed, Arabic and English speech is transcribed on this \(DeviceInfo.kind), and every lecture becomes one file for your AI.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
@@ -69,7 +71,7 @@ struct ContentView: View {
                     .keyboardShortcut("v", modifiers: [.command, .shift])
                 if library.isImporting { HStack { ProgressView(); Text("Importing…").foregroundStyle(.secondary) } }
             } footer: {
-                Text("Keeps working when you switch apps or lock the iPad. Don't swipe the app away in the app switcher: that stops it (it continues on next launch).")
+                Text("Keeps working when you switch apps or lock the \(DeviceInfo.kind). Don't swipe the app away in the app switcher: that stops it (it continues on next launch).")
             }
             if let message = library.message {
                 Section { Text(message).font(.footnote) }
@@ -90,6 +92,7 @@ struct ContentView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingSettings = true } label: { Image(systemName: "gearshape") }
                     .accessibilityLabel("Settings")
+                    .accessibilityIdentifier("settings")
                     .keyboardShortcut(",", modifiers: .command)
             }
         }
@@ -118,7 +121,7 @@ struct EmptyLibrary: View {
         ContentUnavailableView {
             Label("No lectures yet", systemImage: "waveform.badge.mic")
         } description: {
-            Text("In Notability: open a note → Share → choose the Note format → Open in Mentality. Or import from Files, paste, or drag recordings onto this window. You can add many lectures at once.")
+            Text("In Notability: open a note → Share → choose the Note format → Open in Mentality. Or import from Files, paste, or drag recordings here. You can add many lectures at once.")
         } actions: {
             Button("Import lectures…") { importing = true }.buttonStyle(.borderedProminent)
         }

@@ -15,7 +15,7 @@ final class WhisperEndToEndTests: XCTestCase {
 
     private func transcribe(_ url: URL, language: LectureLanguage) async throws -> (LectureTranscript, String) {
         try await WhisperEngine.shared.load(.base, workers: 2) { _, _ in }
-        let audio = try AudioPreparer.prepare(input: url, mode: .lowCut, keepCleanedAudio: false, folder: TestAudio.folder()) { _ in }
+        let audio = try await AudioPreparer.prepare(input: url, mode: .deepFilter, keepCleanedAudio: false, folder: TestAudio.folder()) { _ in }
         var options = TranscriptionPipeline.Options()
         options.language = language.whisperCode
         let transcript = try await TranscriptionPipeline(engine: WhisperEngine.shared, options: options).run(audio: audio, checkpoint: nil) { _, _ in }

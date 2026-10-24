@@ -29,7 +29,7 @@ struct LectureInfo: Sendable {
 /// transcript in paragraphs. Parts that failed the quality check are visible ⚠ lines.
 enum LectureMarkdown {
     static let defaultInstructions = """
-    This is an automatic, on-device transcript of a university lecture, kept in the language(s) the lecturer spoke (often Arabic with English terms). Each paragraph starts with a [hh:mm:ss] timestamp. Speech recognition can mishear names and technical terms: correct obvious errors from context and say when you are unsure. Lines marked ⚠ could not be transcribed reliably; do not invent their content.
+    This is an automatic transcript of a university lecture, kept in the language(s) the lecturer spoke (often Arabic with English terms). Each paragraph starts with a [hh:mm:ss] timestamp. Speech recognition can mishear names and technical terms: correct obvious errors from context and say when you are unsure. Lines marked ⚠ could not be transcribed reliably; do not invent their content.
     Suggested task: 1) List everything the lecturer stressed or said will be on the exam, quiz or OSCE, with timestamps (start from "Lecturer emphasis" below and check each one in context). 2) Write exam questions (MCQs with answers and explanations, then short-answer questions) that cover those points first and then the rest of the lecture. 3) Give the key definitions, lists, numbers and a short summary.
     """
 

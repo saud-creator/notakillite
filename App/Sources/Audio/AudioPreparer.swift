@@ -3,20 +3,44 @@ import AVFoundation
 import Foundation
 
 enum CleanupMode: String, CaseIterable, Identifiable, Codable, Sendable {
-    case voiceIsolation, lowCut, none
+    case deepFilter, rnnoise, voiceIsolation, lowCut, none
     var id: String { rawValue }
+
     var label: String {
         switch self {
-        case .voiceIsolation: "Apple Voice Isolation (removes AC, fans, chatter)"
-        case .lowCut: "Light: remove rumble and hum only"
-        case .none: "Off: use the original audio"
+        case .deepFilter: "DeepFilterNet 3 · best (recommended)"
+        case .rnnoise: "RNNoise · fast, lighter"
+        case .voiceIsolation: "Apple Voice Isolation"
+        case .lowCut: "Light · rumble and hum only"
+        case .none: "Off · original audio"
         }
     }
+
     var shortLabel: String {
         switch self {
+        case .deepFilter: "DeepFilterNet 3 + rumble filter"
+        case .rnnoise: "RNNoise + rumble filter"
         case .voiceIsolation: "Apple Voice Isolation + rumble filter"
         case .lowCut: "Rumble filter"
         case .none: "None"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .deepFilter: "A state-of-the-art neural network for speech, built into the app. Removes air conditioning, fans, traffic and chatter while keeping the voice natural. Uses all CPU cores."
+        case .rnnoise: "A small, very fast neural network from Xiph. Removes steady noise well; less effective on chatter."
+        case .voiceIsolation: "Apple's built-in voice isolation."
+        case .lowCut: "Only removes low rumble and electrical hum."
+        case .none: "Whisper gets the recording as it is."
+        }
+    }
+
+    var neuralModel: NeuralModel? {
+        switch self {
+        case .deepFilter: .deepFilter
+        case .rnnoise: .rnnoise
+        default: nil
         }
     }
 }
@@ -31,23 +55,24 @@ struct PreparedAudio: Codable, Equatable, Sendable {
 }
 
 enum AudioPreparationError: LocalizedError {
-    case unreadable(String), failed(String)
+    case unreadable(String), failed(String), modelUnavailable(String)
     var errorDescription: String? {
         switch self {
         case .unreadable(let name): "\(name) has no readable audio, is damaged, or is protected."
         case .failed(let reason): "Audio processing failed: \(reason)"
+        case .modelUnavailable(let reason): "The noise removal model could not start: \(reason)"
         }
     }
 }
 
-/// Decodes any recording, removes background noise on-device, and writes 16 kHz speech audio.
+/// Decodes any recording, removes background noise on the device, and writes 16 kHz speech audio.
 ///
 /// Runs on the CPU only, so it keeps working in the background (iPadOS doesn't allow GPU work there).
 enum AudioPreparer {
     static let workRate = 48_000.0
     static let speechRate = 16_000.0
 
-    /// Apple's machine-learning voice isolation effect ('vois'), built into iPadOS.
+    /// Apple's machine-learning voice isolation effect ('vois'), built into iPadOS and iOS.
     static var voiceIsolationDescription: AudioComponentDescription {
         AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: 0x766F_6973,
                                   componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
@@ -62,8 +87,17 @@ enum AudioPreparer {
         AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: speechRate, channels: 1, interleaved: true)!
     }
 
+    /// The decoded recording is kept as 16-bit audio (half the space of 32-bit floats).
+    static var decodedFormat: AVAudioFormat {
+        AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: workRate, channels: 1, interleaved: true)!
+    }
+
+    static var cleanedAudioSettings: [String: Any] {
+        [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: workRate, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000]
+    }
+
     static func prepare(input: URL, mode: CleanupMode, keepCleanedAudio: Bool, folder: URL,
-                        progress: @escaping @Sendable (Double) -> Void) throws -> PreparedAudio {
+                        progress: @escaping @Sendable (Double) -> Void) async throws -> PreparedAudio {
         let fm = FileManager.default
         try fm.createDirectory(at: folder, withIntermediateDirectories: true)
         let source: AVAudioFile
@@ -71,27 +105,44 @@ enum AudioPreparer {
         guard source.length > 0 else { throw AudioPreparationError.unreadable(input.lastPathComponent) }
         try checkFreeSpace(seconds: Double(source.length) / source.fileFormat.sampleRate, in: folder)
 
-        // 1. Decode to 48 kHz mono so every source format reaches the effects the same way.
-        let mono48 = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: workRate, channels: 1, interleaved: false)!
+        // 1. Decode to 48 kHz mono so every source format reaches the cleanup the same way.
         let decoded = folder.appendingPathComponent("decoded-48k.caf")
-        try convert(source, to: decoded, format: mono48) { progress($0 * 0.2) }
+        try convert(source, to: decoded, format: decodedFormat) { progress($0 * 0.15) }
         defer { try? fm.removeItem(at: decoded) }
 
         // 2. The untouched original at 16 kHz, kept for retries.
         let original = folder.appendingPathComponent("original-16k.wav")
-        try convert(try AVAudioFile(forReading: decoded), to: original, format: speechFormat) { progress(0.2 + $0 * 0.15) }
+        try convert(try AVAudioFile(forReading: decoded), to: original, format: speechFormat) { progress(0.15 + $0 * 0.1) }
 
-        let duration = Double(try AVAudioFile(forReading: decoded).length) / workRate
+        let total = try AVAudioFile(forReading: decoded).length
+        let duration = Double(total) / workRate
         if mode == .none {
             progress(1)
             return PreparedAudio(original: original, speech: original, cleanedM4A: nil, duration: duration, cleanupLabel: CleanupMode.none.shortLabel)
         }
 
-        // 3. Noise cleanup, rendered offline (faster than real time).
+        // 3. Noise cleanup.
         let speech = folder.appendingPathComponent("speech-16k.wav")
         let cleaned = keepCleanedAudio ? folder.appendingPathComponent("cleaned.m4a") : nil
-        let usedIsolation = try render(decoded: decoded, isolation: mode == .voiceIsolation && voiceIsolationAvailable,
-                                       speech: speech, cleaned: cleaned) { progress(0.35 + $0 * 0.6) }
+        var used = mode
+        var note = ""
+        if let model = mode.neuralModel {
+            do {
+                try await neural(model, decoded: decoded, total: Int(total), folder: folder, speech: speech, cleaned: cleaned) { progress(0.25 + $0 * 0.72) }
+            } catch AudioPreparationError.modelUnavailable(let reason) {
+                // Should never happen (the models are part of the app), but never lose a lecture over it.
+                used = voiceIsolationAvailable ? .voiceIsolation : .lowCut
+                note = " (\(mode.shortLabel) could not start: \(reason))"
+            }
+        }
+        if used.neuralModel == nil {
+            let isolation = used == .voiceIsolation && voiceIsolationAvailable
+            if used == .voiceIsolation && !isolation {
+                used = .lowCut
+                note += " (Apple Voice Isolation is not available on this device)"
+            }
+            try render(decoded: decoded, isolation: isolation, speech: speech, cleaned: cleaned) { progress(0.25 + $0 * 0.72) }
+        }
 
         // 4. Safety net: if cleanup removed most of the voice, transcribe the original instead.
         let before = try levelSummary(original), after = try levelSummary(speech)
@@ -101,17 +152,11 @@ enum AudioPreparer {
             return PreparedAudio(original: original, speech: original, cleanedM4A: cleaned, duration: duration,
                                  cleanupLabel: "None (cleanup removed too much of the voice, so the original audio was used)")
         }
-        // Report honestly what the cleanup did, measured on the background noise between words.
+        // Report what the cleanup did, measured on the background noise between words.
         let reduction = before.floor - after.floor
-        var label: String
-        if usedIsolation {
-            label = reduction >= 1 ? "Apple Voice Isolation + rumble filter (background noise \(Int(reduction.rounded())) dB lower)"
-                                   : "Rumble filter (Apple Voice Isolation ran but had no measurable effect on this recording)"
-        } else {
-            label = CleanupMode.lowCut.shortLabel
-            if mode == .voiceIsolation { label += " (Voice Isolation is not available on this device)" }
-        }
-        return PreparedAudio(original: original, speech: speech, cleanedM4A: cleaned, duration: duration, cleanupLabel: label)
+        let effect = reduction >= 1 ? "background noise \(Int(reduction.rounded())) dB lower" : "no measurable background noise to remove"
+        return PreparedAudio(original: original, speech: speech, cleanedM4A: cleaned, duration: duration,
+                             cleanupLabel: "\(used.shortLabel) (\(effect))\(note)")
     }
 
     /// Temporary audio needs about 260 kB per second of recording (≈ 1.4 GB for 90 minutes).
@@ -120,13 +165,61 @@ enum AudioPreparer {
         let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         if let available = values?.volumeAvailableCapacityForImportantUsage, available > 0, available < needed {
             let gb = { (bytes: Int64) in String(format: "%.1f GB", Double(bytes) / 1e9) }
-            throw AudioPreparationError.failed("not enough free space on the iPad. This recording needs about \(gb(needed)) while it is processed; \(gb(available)) is free.")
+            throw AudioPreparationError.failed("not enough free space. This recording needs about \(gb(needed)) while it is processed; \(gb(available)) is free.")
         }
+    }
+
+    /// Neural noise removal on all cores, then the rumble filter, the kept audio and 16 kHz speech.
+    private static func neural(_ model: NeuralModel, decoded: URL, total: Int, folder: URL, speech: URL, cleaned: URL?,
+                               progress: @escaping @Sendable (Double) -> Void) async throws {
+        let raw = folder.appendingPathComponent("cleaned-48k.raw")
+        defer { try? FileManager.default.removeItem(at: raw) }
+        try await NeuralCleanup.run(input: decoded, output: raw, options: NeuralCleanup.Options(model: model)) { progress($0 * 0.85) }
+        try finish(raw: raw, total: total, speech: speech, cleaned: cleaned) { progress(0.85 + $0 * 0.15) }
+    }
+
+    /// Reads the cleaned 16-bit audio, filters rumble, and writes the kept audio and 16 kHz speech.
+    private static func finish(raw: URL, total: Int, speech: URL, cleaned: URL?, progress: (Double) -> Void) throws {
+        let fm = FileManager.default
+        let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: workRate, channels: 1, interleaved: false)!
+        let handle = try FileHandle(forReadingFrom: raw)
+        defer { try? handle.close() }
+        try? fm.removeItem(at: speech)
+        let speechFile = try AVAudioFile(forWriting: speech, settings: speechFormat.settings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        guard let toSpeech = AVAudioConverter(from: format, to: speechFile.processingFormat) else { throw AudioPreparationError.failed("no converter") }
+        var cleanedFile: AVAudioFile?
+        if let cleaned {
+            try? fm.removeItem(at: cleaned)
+            cleanedFile = try AVAudioFile(forWriting: cleaned, settings: cleanedAudioSettings, commonFormat: .pcmFormatFloat32, interleaved: false)
+        }
+        var filter = HighPass(cutoff: 80, sampleRate: workRate)
+        let chunk = 48_000
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(chunk)),
+              let out = buffer.floatChannelData?[0] else { throw AudioPreparationError.failed("no memory") }
+        var ints = [Int16](repeating: 0, count: chunk)
+        var done = 0
+        while done < total {
+            try Task.checkCancellation()
+            CPUBudget.shared.throttle()
+            let count = min(chunk, total - done)
+            guard let data = try handle.read(upToCount: count * 2), data.count == count * 2 else {
+                throw AudioPreparationError.failed("the cleaned audio is incomplete")
+            }
+            _ = ints.withUnsafeMutableBufferPointer { data.copyBytes(to: $0) }
+            for i in 0..<count { out[i] = Float(Int16(littleEndian: ints[i])) / 32_768 }
+            filter.apply(out, count: count)
+            buffer.frameLength = AVAudioFrameCount(count)
+            try cleanedFile?.write(from: buffer)
+            try appendConverted(buffer, with: toSpeech, to: speechFile)
+            done += count
+            progress(Double(done) / Double(total))
+        }
+        try flush(toSpeech, to: speechFile)
     }
 
     /// Plays the decoded audio through a rumble filter (and Voice Isolation) in offline mode.
     /// Effect latency is compensated, so timestamps and the end of the lecture stay exact.
-    private static func render(decoded: URL, isolation: Bool, speech: URL, cleaned: URL?, progress: (Double) -> Void) throws -> Bool {
+    private static func render(decoded: URL, isolation: Bool, speech: URL, cleaned: URL?, progress: (Double) -> Void) throws {
         let input = try AVAudioFile(forReading: decoded)
         let format = input.processingFormat
         let total = input.length
@@ -162,16 +255,18 @@ enum AudioPreparer {
         var cleanedFile: AVAudioFile?
         if let cleaned {
             try? fm.removeItem(at: cleaned)
-            let aac: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: workRate, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000]
-            cleanedFile = try AVAudioFile(forWriting: cleaned, settings: aac, commonFormat: .pcmFormatFloat32, interleaved: false)
+            cleanedFile = try AVAudioFile(forWriting: cleaned, settings: cleanedAudioSettings, commonFormat: .pcmFormatFloat32, interleaved: false)
         }
         let latencyFrames = AVAudioFramePosition(max(0, latency) * format.sampleRate)
         let end = total + latencyFrames
         var skip = latencyFrames
         let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
         var stalls = 0
+        var rounds = 0
         while engine.manualRenderingSampleTime < end {
             try Task.checkCancellation()
+            rounds += 1
+            if rounds % 12 == 0 { CPUBudget.shared.throttle() }
             let remaining = AVAudioFrameCount(end - engine.manualRenderingSampleTime)
             let status = try engine.renderOffline(min(buffer.frameCapacity, remaining), to: buffer)
             switch status {
@@ -195,7 +290,6 @@ enum AudioPreparer {
             }
         }
         try flush(toSpeech, to: speechFile)
-        return isolation
     }
 
     private static func dropFirst(_ frames: Int, of buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
@@ -234,8 +328,11 @@ enum AudioPreparer {
         let input = AVAudioPCMBuffer(pcmFormat: source.processingFormat, frameCapacity: 32_768)!
         let ratio = output.processingFormat.sampleRate / source.processingFormat.sampleRate
         var finished = false
+        var rounds = 0
         while !finished {
             try Task.checkCancellation()
+            rounds += 1
+            if rounds % 4 == 0 { CPUBudget.shared.throttle() }
             let out = AVAudioPCMBuffer(pcmFormat: output.processingFormat, frameCapacity: AVAudioFrameCount(Double(input.frameCapacity) * ratio) + 1024)!
             var readError: Error?
             let status = converter.convert(to: out, error: nil) { _, inputStatus in
@@ -275,5 +372,35 @@ enum AudioPreparer {
         let sorted = levels.sorted()
         let loud = sorted.suffix(max(1, sorted.count / 2))
         return (loud.reduce(0, +) / Double(loud.count), sorted[Int(Double(sorted.count - 1) * 0.1)])
+    }
+}
+
+/// Second-order Butterworth high-pass filter: removes rumble and hum below the voice.
+struct HighPass {
+    private let b0, b1, b2, a1, a2: Double
+    private var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0
+
+    init(cutoff: Double, sampleRate: Double) {
+        let w0 = 2 * Double.pi * cutoff / sampleRate
+        let alpha = sin(w0) / 2.0.squareRoot()   // sin(w0) / (2 Q) with Q = 1/√2
+        let cosine = cos(w0)
+        let a0 = 1 + alpha
+        b0 = (1 + cosine) / 2 / a0
+        b1 = -(1 + cosine) / a0
+        b2 = (1 + cosine) / 2 / a0
+        a1 = -2 * cosine / a0
+        a2 = (1 - alpha) / a0
+    }
+
+    mutating func apply(_ samples: UnsafeMutablePointer<Float>, count: Int) {
+        for i in 0..<count {
+            let x = Double(samples[i])
+            let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            samples[i] = Float(y)
+        }
     }
 }

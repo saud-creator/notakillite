@@ -4,38 +4,64 @@ import WhisperKit
 
 /// Whisper models offered in the app. Names are folders in huggingface.co/argmaxinc/whisperkit-coreml.
 enum WhisperModel: String, CaseIterable, Identifiable, Codable, Sendable {
-    case largeV3 = "openai_whisper-large-v3"
     case turbo = "openai_whisper-large-v3-v20240930"
+    case largeV3 = "openai_whisper-large-v3"
     case turboCompact = "openai_whisper-large-v3-v20240930_626MB"
+    case largeV3Compact = "openai_whisper-large-v3_947MB"
     case small = "openai_whisper-small"
     case base = "openai_whisper-base"     // used by the automated tests
 
     var id: String { rawValue }
-    static var offered: [WhisperModel] { [.largeV3, .turbo, .turboCompact, .small] }
+
+    /// The models a device can run, recommended first. Devices with enough memory, such as iPad Pro
+    /// (M4), get both full-size large models; the iPhone 15 Pro gets the compressed versions of the
+    /// same two models (Argmax's device table, built into WhisperKit).
+    static func supported(on device: String) -> [WhisperModel] {
+        let runnable = Set(ModelUtilities.modelSupport(for: device).supported)
+        var list = [WhisperModel.turbo, .largeV3, .turboCompact, .largeV3Compact, .small].filter { runnable.contains($0.rawValue) }
+        if list.contains(.turbo) { list.removeAll { $0 == .turboCompact } }
+        if list.contains(.largeV3) { list.removeAll { $0 == .largeV3Compact } }
+        return list.isEmpty ? [.small] : list
+    }
+
+    /// Fast and accurate: large-v3 turbo, full size where the device runs it, compressed otherwise.
+    static func recommendedModel(on device: String) -> WhisperModel {
+        let list = supported(on: device)
+        return list.first { $0 == .turbo || $0 == .turboCompact } ?? list[0]
+    }
+
+    /// The models offered on this device (worked out once).
+    static let offered: [WhisperModel] = supported(on: DeviceInfo.identifier)
+    static let recommended: WhisperModel = recommendedModel(on: DeviceInfo.identifier)
 
     var title: String {
         switch self {
-        case .largeV3: "Best accuracy · large-v3"
-        case .turbo: "Fast and accurate · large-v3 turbo"
-        case .turboCompact: "Compact · large-v3 turbo (626 MB)"
-        case .small: "Light · small"
-        case .base: "Test · base"
+        case .turbo: "large-v3 turbo · fast, very accurate"
+        case .largeV3: "large-v3 · most accurate, slower"
+        case .turboCompact: "large-v3 turbo · compressed, 626 MB"
+        case .largeV3Compact: "large-v3 · compressed, 947 MB"
+        case .small: "small · light"
+        case .base: "base · tests"
         }
     }
+
     var detail: String {
         switch self {
-        case .largeV3: "Full Whisper large-v3, about 3 GB. The most accurate for Arabic and mixed lectures. Slowest; first start takes several minutes while iPadOS prepares it for the Neural Engine."
-        case .turbo: "About 1.6 GB. Close to large-v3 accuracy and several times faster. Recommended for iPad Pro M4."
-        case .turboCompact: "Compressed turbo. Smaller download, slightly less accurate."
+        case .turbo: "About 1.6 GB. Nearly as accurate as large-v3 and several times faster. Recommended."
+        case .largeV3: "About 3 GB. The most accurate for Arabic and mixed lectures. Slower; its first start takes several minutes while the Neural Engine prepares it."
+        case .turboCompact: "The turbo model compressed to fit this device's memory. Fast and accurate. Recommended."
+        case .largeV3Compact: "Full large-v3 compressed to fit this device's memory: the most accurate choice here, but slower than turbo."
         case .small: "About 480 MB. Fast, but noticeably weaker on Arabic."
         case .base: "Tiny model used by the automated tests."
         }
     }
+
     var shortName: String {
         switch self {
-        case .largeV3: "large-v3"
         case .turbo: "large-v3 turbo"
+        case .largeV3: "large-v3"
         case .turboCompact: "large-v3 turbo (compressed)"
+        case .largeV3Compact: "large-v3 (compressed)"
         case .small: "small"
         case .base: "base"
         }
@@ -52,7 +78,7 @@ enum WhisperEngineError: LocalizedError {
     }
 }
 
-/// On-device Whisper through WhisperKit (Core ML). Audio never leaves the iPad.
+/// On-device Whisper through WhisperKit (Core ML). Audio never leaves the device.
 ///
 /// The encoder and decoder run on the Neural Engine and the spectrogram on the CPU: iPadOS stops apps
 /// that use the GPU in the background, and the Neural Engine is the fastest unit for Whisper on M4.
@@ -145,6 +171,7 @@ actor WhisperEngine: SpeechEngine {
     func transcribe(_ pieces: [[Float]], settings: DecodeSettings) async throws -> [PieceResult] {
         guard let pipe else { throw WhisperEngineError.modelUnavailable("not loaded") }
         guard !pieces.isEmpty else { return [] }
+        let budget = CPUBudget.shared
 
         // Language per piece: fixed, or the likelier of Arabic and English.
         var languages: [String] = []
@@ -152,7 +179,7 @@ actor WhisperEngine: SpeechEngine {
             languages = Array(repeating: fixed, count: pieces.count)
         } else {
             for piece in pieces {
-                try Task.checkCancellation()
+                try await budget.pause()
                 let detection = try? await pipe.detectLangauge(audioArray: piece)   // (sic) WhisperKit's spelling
                 languages.append(Self.arabicOrEnglish(detection?.langProbs ?? [:], detected: detection?.language))
             }
@@ -161,13 +188,21 @@ actor WhisperEngine: SpeechEngine {
         var results = [PieceResult?](repeating: nil, count: pieces.count)
         for language in Set(languages).sorted() {
             let indices = languages.indices.filter { languages[$0] == language }
-            let out = try await decode(indices.map { pieces[$0] }, language: language, settings: settings, pipe: pipe)
-            for (n, index) in indices.enumerated() where n < out.count { results[index] = out[n] }
+            var next = 0
+            while next < indices.count {
+                // In the background, one piece at a time, so the CPU budget can be kept (see CPUBudget).
+                try await budget.pause()
+                let limited = budget.isLimited
+                let group = Array(indices[next..<min(indices.count, next + (limited ? 1 : indices.count))])
+                let out = try await decode(group.map { pieces[$0] }, language: language, settings: settings, pipe: pipe, workers: limited ? 1 : workers)
+                for (n, index) in group.enumerated() where n < out.count { results[index] = out[n] }
+                next += group.count
+            }
         }
         return results.map { $0 ?? PieceResult(segments: [], language: nil) }
     }
 
-    private func decode(_ pieces: [[Float]], language: String, settings: DecodeSettings, pipe: WhisperKit) async throws -> [PieceResult] {
+    private func decode(_ pieces: [[Float]], language: String, settings: DecodeSettings, pipe: WhisperKit, workers: Int) async throws -> [PieceResult] {
         var options = DecodingOptions(
             task: .transcribe,
             language: language,

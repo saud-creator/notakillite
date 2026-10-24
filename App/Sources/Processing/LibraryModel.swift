@@ -5,9 +5,9 @@ import UniformTypeIdentifiers
 
 /// The app's state: imported courses and lectures, and the processing queue.
 ///
-/// Lectures are processed one at a time on the Neural Engine. While one is being transcribed, the
-/// next one's audio is cleaned on the CPU at the same time, so the M4 never waits on audio work.
-/// Everything is saved to disk, so a closed app resumes where it stopped.
+/// Lectures are processed one at a time: speech recognition on the Neural Engine (or a cloud service),
+/// while the next lecture's audio is already being cleaned on the CPU cores, so neither waits on the
+/// other. Everything is saved to disk, so a closed app resumes where it stopped.
 @MainActor
 final class LibraryModel: ObservableObject {
     @Published private(set) var courses: [Course] = []
@@ -17,15 +17,18 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var isImporting = false
 
     private var worker: Task<Void, Never>?
-    private var current: (id: UUID, task: Task<Void, Never>)?
+    private var current: (id: UUID, task: Task<Bool, Never>)?
     private var prepared: [UUID: Task<PreparedAudio, Error>] = [:]
+    private var cloud: CloudSpeechEngine?
     private var lastSave = Date.distantPast
     private let demo: Bool
     private let keeper = BackgroundKeeper.shared
+    private var observers: [NSObjectProtocol] = []
 
     init(demo: Bool = false) {
         self.demo = demo
         if demo { seedDemo(); return }
+        watchAppState()
         var data = LibraryData.load()
         let resumed = data.recoverInterrupted()
         courses = data.courses
@@ -33,6 +36,24 @@ final class LibraryModel: ObservableObject {
         if resumed > 0 || lectures.contains(where: { $0.status == .queued }) {
             message = "Continuing \(lectures.filter { $0.status == .queued }.count) lecture(s) from where they stopped."
             start()
+        }
+        if AutoTest.isActive {
+            AutoTestReporter.start(library: self)
+            let files = AutoTest.importPaths.map { URL(fileURLWithPath: $0) }
+            if !files.isEmpty { importFiles(files) }
+        }
+    }
+
+    /// In the background the app limits its own CPU use, or iPadOS would stop it (see `CPUBudget`).
+    private func watchAppState() {
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { _ in
+            CPUBudget.shared.setLimited(true)
+        })
+        for name in [UIApplication.willEnterForegroundNotification, UIApplication.didBecomeActiveNotification] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                CPUBudget.shared.setLimited(false)
+            })
         }
     }
 
@@ -220,15 +241,14 @@ final class LibraryModel: ObservableObject {
         while let next = lectures.first(where: { $0.status == .queued }) {
             let task = Task { await self.process(next.id, settings: settings) }
             current = (next.id, task)
-            await task.value
+            let stop = await task.value
             current = nil
-            if let done = lectures.first(where: { $0.id == next.id }) {
-                if done.isFinished { finished.append(done) }
-                if done.status == .failed, done.error?.contains("speech model") == true { break }   // no model: stop the run
-            }
+            if let done = lectures.first(where: { $0.id == next.id }), done.isFinished { finished.append(done) }
+            if stop { break }   // a problem every lecture would hit (no model, no key, no credit…)
         }
         for task in prepared.values { task.cancel() }
         prepared.removeAll()
+        cloud = nil
         save(force: true)
         if settings.notify, !finished.isEmpty {
             let review = finished.filter { $0.status == .needsReview }.count
@@ -237,8 +257,9 @@ final class LibraryModel: ObservableObject {
         }
     }
 
-    private func process(_ id: UUID, settings: AppSettings) async {
-        guard let lecture = lectures.first(where: { $0.id == id }), let course = course(lecture.courseID) else { return }
+    /// Processes one lecture. Returns true when the queue should stop because every lecture would fail the same way.
+    private func process(_ id: UUID, settings: AppSettings) async -> Bool {
+        guard let lecture = lectures.first(where: { $0.id == id }), let course = course(lecture.courseID) else { return false }
         do {
             // 1. Audio (may already be running in parallel, started while the previous lecture transcribed).
             update(id) { $0.status = .preparing; $0.phase = "Cleaning audio"; $0.progress = 0.01; $0.error = nil }
@@ -248,11 +269,9 @@ final class LibraryModel: ObservableObject {
             prepared[id] = nil
             update(id) { $0.duration = audio.duration }
 
-            // 2. Model (downloaded once, then loaded once per run).
-            update(id) { $0.status = .transcribing; $0.phase = "Loading speech model"; $0.progress = 0.25 }
-            try await WhisperEngine.shared.load(settings.model, workers: settings.workers) { [weak self] text, fraction in
-                Task { @MainActor in self?.update(id) { $0.phase = text; $0.progress = 0.25 + fraction * 0.03 } }
-            }
+            // 2. Speech engine: the Whisper model (downloaded once, loaded once per run) or the cloud service.
+            update(id) { $0.status = .transcribing; $0.phase = settings.service.isCloud ? "Sending speech to \(settings.service.name)" : "Loading speech model"; $0.progress = 0.25 }
+            let engine = try await speechEngine(settings, lecture: id)
 
             // 3. Start cleaning the next lecture's audio while this one transcribes.
             if let following = lectures.first(where: { $0.status == .queued && $0.id != id }) {
@@ -263,9 +282,14 @@ final class LibraryModel: ObservableObject {
             var options = TranscriptionPipeline.Options()
             options.language = settings.language.whisperCode
             options.vocabulary = settings.vocabulary
-            options.batchSize = max(4, settings.workers * 2)
-            options.checkpointKey = [settings.model.rawValue, settings.language.rawValue, settings.vocabulary, settings.cleanup.rawValue].joined(separator: "|")
-            let pipeline = TranscriptionPipeline(engine: WhisperEngine.shared, options: options, device: UIDevice.current.model)
+            if settings.service.isCloud {
+                options.batchSize = 8
+                options.retryBudgetShare = 0.5   // re-sending audio costs money: at most half the lecture again
+            } else {
+                options.batchSize = max(4, settings.workers * 2)
+            }
+            options.checkpointKey = [settings.engineKey, settings.language.rawValue, settings.vocabulary, settings.cleanup.rawValue].joined(separator: "|")
+            let pipeline = TranscriptionPipeline(engine: engine, options: options, device: DeviceInfo.kind)
             let checkpoint = Storage.workFolder(lecture).appendingPathComponent("checkpoint.json")
             let transcript = try await pipeline.run(audio: audio, checkpoint: checkpoint) { [weak self] text, fraction in
                 Task { @MainActor in self?.update(id) { $0.phase = text; $0.progress = 0.28 + fraction * 0.7 } }
@@ -288,15 +312,49 @@ final class LibraryModel: ObservableObject {
             try? writeIndex(course)
             // Free space: prepared audio and checkpoint are no longer needed. The imported source stays.
             try? FileManager.default.removeItem(at: Storage.workFolder(lecture))
+            save(force: true)
+            AutoTestReporter.shared?.noteFinished(id)
+            return false
         } catch {
             prepared.removeValue(forKey: id)?.cancel()
             if error is CancellationError || Task.isCancelled {
                 update(id) { $0.status = .cancelled; $0.phase = "Cancelled" }
-            } else {
-                update(id) { $0.status = .failed; $0.phase = "Needs attention"; $0.error = error.localizedDescription }
+                save(force: true)
+                return false
             }
+            update(id) { $0.status = .failed; $0.phase = "Needs attention"; $0.error = error.localizedDescription }
+            save(force: true)
+            let stop = Self.stopsQueue(error)
+            let waiting = lectures.filter { $0.status == .queued }.count
+            if stop && waiting > 0 {
+                message = "Stopped: \(error.localizedDescription) \(waiting) lecture\(waiting == 1 ? " is" : "s are") still waiting. Tap Start when it's fixed."
+            }
+            return stop
         }
-        save(force: true)
+    }
+
+    /// Whisper on the device, or the chosen cloud service with the key saved in Settings.
+    private func speechEngine(_ settings: AppSettings, lecture id: UUID) async throws -> SpeechEngine {
+        if settings.service.isCloud {
+            let key = KeyStore.key(for: settings.service) ?? ""
+            if key.isEmpty && settings.service != .custom { throw CloudSpeechError.missingKey(settings.service.name) }
+            let config = CloudConfig(service: settings.service, model: settings.cloudModel, apiKey: key, baseURL: settings.customBaseURL)
+            if let cloud, cloud.config == config { return cloud }
+            let engine = CloudSpeechEngine(config: config)
+            cloud = engine
+            return engine
+        }
+        try await WhisperEngine.shared.load(settings.model, workers: settings.workers) { [weak self] text, fraction in
+            Task { @MainActor in self?.update(id) { $0.phase = text; $0.progress = 0.25 + fraction * 0.03 } }
+        }
+        return WhisperEngine.shared
+    }
+
+    /// Problems that would fail every waiting lecture the same way.
+    nonisolated static func stopsQueue(_ error: Error) -> Bool {
+        if let whisper = error as? WhisperEngineError, case .modelUnavailable = whisper { return true }
+        if let cloud = error as? CloudSpeechError { return cloud.stopsQueue }
+        return false
     }
 
     /// Returns the (possibly already running) audio preparation for a lecture.
@@ -318,7 +376,7 @@ final class LibraryModel: ObservableObject {
         }
         let task = Task.detached(priority: background ? .utility : .userInitiated) { () throws -> PreparedAudio in
             if let reused = PreparedRecord.load(in: folder, mode: mode, keepCleaned: keep) { report(1); return reused }
-            let audio = try AudioPreparer.prepare(input: source, mode: mode, keepCleanedAudio: keep, folder: folder, progress: report)
+            let audio = try await AudioPreparer.prepare(input: source, mode: mode, keepCleanedAudio: keep, folder: folder, progress: report)
             PreparedRecord.save(audio, in: folder, mode: mode, keepCleaned: keep)
             return audio
         }

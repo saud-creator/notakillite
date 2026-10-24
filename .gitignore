@@ -5,3 +5,9 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 .swiftpm/
+# Fetched and built by scripts/build-noise-models.sh
+Packages/NoiseModels/DeepFilter.xcframework/
+Packages/NoiseModels/Sources/CRNNoise/
+Packages/NoiseModels/Sources/NoiseModels/Resources/
+Packages/NoiseModels/.built-v*
+Packages/NoiseModels/TestAssets/
