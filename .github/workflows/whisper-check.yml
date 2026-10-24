@@ -1,13 +1,12 @@
 name: Whisper check
 
 # Why does Whisper write (almost) no text on the iPadOS 18 simulator when the same test passes on the
-# iOS 27 iPhone simulator? Findings so far: on the macOS 15 runner (macOS 15.7, virtual M1) the
-# simulator computes Whisper's audio encoder wrongly with Xcode 16 and 26 and on iOS 18.6 and 26.2
-# alike (the spectrogram going in is identical), while an iPad simulator on the Xcode 27 runner
-# (macOS 27, the same virtual M1) transcribes English and Arabic correctly. The macOS 26 runner has
-# no iOS 18 simulator. This run downloads the iOS 18.6 simulator on the newer runners, to test
-# iPadOS 18 on a machine that computes correctly. Each job prints "DIAG" lines. Runs when this
-# check changes, or by hand.
+# iOS 27 iPhone simulator? Findings so far: the iOS 18.6 simulator computes the base model's audio
+# encoder wrongly on both the macOS 15 and the macOS 26 runner (the spectrogram going in is identical),
+# and so does iOS 26.2 on macOS 15, while iOS 27 on the Xcode 27 runner is right. iOS 18.6 can't be
+# downloaded on the Xcode 27 runner. WhisperKit's own CI transcribes correctly with the tiny model on
+# iOS 18 simulators, so this run compares base with tiny. Each job prints "DIAG <model> <language>"
+# lines. Runs when this check changes, or by hand.
 
 on:
   push:
@@ -30,10 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - title: Xcode 27 runner · iPad · iOS 18.6 (downloaded)
-            runner: xcode-27
-            xcode: ""
-            download: "18.6"
+          - title: macOS 15 runner · Xcode 16 · iPad · iOS 18.6 (the App workflow's iPad host)
+            runner: macos-15
+            xcode: "16"
+            download: ""
             os: "18"
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)

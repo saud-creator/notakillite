@@ -6,14 +6,20 @@ import WhisperKit
 /// Debug builds only (used by the Whisper check in CI): what Whisper sees and writes for some audio,
 /// as lines that can be compared between simulators and Xcode versions.
 enum WhisperDiagnosis {
-    static func run(samples: [Float], language: String, modelFolder: URL) async throws -> [String] {
+    /// Downloads another Whisper model (for example "openai_whisper-tiny") to compare with the test model.
+    static func download(_ variant: String) async throws -> URL {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("whisper-diagnosis", isDirectory: true)
+        return try await WhisperKit.download(variant: variant, downloadBase: base)
+    }
+
+    static func run(samples: [Float], language: String, modelFolder: URL, variant: String = WhisperModel.base.rawValue) async throws -> [String] {
         var lines = ["OS \(ProcessInfo.processInfo.operatingSystemVersionString), simulator \(WhisperKit.isRunningOnSimulator), device \(DeviceInfo.identifier)"]
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: modelFolder.path)) ?? []).sorted()
         lines.append("model files: \(names.joined(separator: ", "))")
         let rms = (samples.reduce(0.0) { $0 + Double($1) * Double($1) } / Double(max(1, samples.count))).squareRoot()
         lines.append("audio: \(samples.count) samples, rms \(String(format: "%.4f", rms))")
 
-        let pipe = try await WhisperKit(WhisperKitConfig(model: WhisperModel.base.rawValue, downloadBase: WhisperEngine.modelsFolder, modelFolder: modelFolder.path,
+        let pipe = try await WhisperKit(WhisperKitConfig(model: variant, downloadBase: WhisperEngine.modelsFolder, modelFolder: modelFolder.path,
                                                          verbose: false, logLevel: .error, prewarm: false, load: true, download: false))
         lines.append("compute units: mel \(pipe.modelCompute.melCompute.rawValue), encoder \(pipe.modelCompute.audioEncoderCompute.rawValue), decoder \(pipe.modelCompute.textDecoderCompute.rawValue)")
 
