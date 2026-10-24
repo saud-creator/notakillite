@@ -5,8 +5,10 @@ name: Whisper check
 # encoder wrongly on both the macOS 15 and the macOS 26 runner (the spectrogram going in is identical),
 # and so does iOS 26.2 on macOS 15, while iOS 27 on the Xcode 27 runner is right. iOS 18.6 can't be
 # downloaded on the Xcode 27 runner. WhisperKit's own CI transcribes correctly with the tiny model on
-# iOS 18 simulators, so this run compares base with tiny. Each job prints "DIAG <model> <language>"
-# lines. Runs when this check changes, or by hand.
+# iOS 18 simulators: confirmed, tiny transcribes English and Arabic correctly there, so the App
+# workflow's iPad job uses tiny. This run follows tiny through the app's own decoding settings,
+# DeepFilterNet and the pipeline, to see where the Arabic end-to-end test loses its text. Each job
+# prints "DIAG" lines. Runs when this check changes, or by hand.
 
 on:
   push:
@@ -33,13 +35,6 @@ jobs:
             runner: macos-15
             xcode: "16"
             download: ""
-            os: "18"
-            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
-            create: iPad Pro 13-inch (M4)
-          - title: macOS 26 runner · Xcode 26 · iPad · iOS 18.6 (downloaded)
-            runner: macos-26
-            xcode: "26"
-            download: "18.6"
             os: "18"
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
@@ -130,6 +125,7 @@ jobs:
       - name: Whisper diagnosis and end-to-end tests
         env:
           TEST_RUNNER_MENTALITY_WHISPER_DIAG: "1"
+          TEST_RUNNER_MENTALITY_MODEL: openai_whisper-tiny
           TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
         run: |
           set -o pipefail
