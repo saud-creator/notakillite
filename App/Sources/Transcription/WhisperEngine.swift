@@ -123,7 +123,8 @@ actor WhisperEngine: SpeechEngine {
             stage("Preparing \(model.shortName) for the Neural Engine (slow only the first time)", 0.85)
             let compute = ModelComputeOptions(melCompute: .cpuOnly, audioEncoderCompute: .cpuAndNeuralEngine, textDecoderCompute: .cpuAndNeuralEngine)
             let config = WhisperKitConfig(model: model.rawValue, downloadBase: Self.modelsFolder, modelFolder: folder.path,
-                                          computeOptions: compute, verbose: false, logLevel: .error, prewarm: true, load: true, download: false)
+                                          computeOptions: compute, logitsFilters: [CPUPauseFilter()],
+                                          verbose: false, logLevel: .error, prewarm: true, load: true, download: false)
             pipe = try await WhisperKit(config)
             loaded = model
             try? Data().write(to: folder.appendingPathComponent(Self.readyMarker))
@@ -240,5 +241,22 @@ actor WhisperEngine: SpeechEngine {
             }
         }
         return out
+    }
+}
+
+/// WhisperKit runs this before choosing each word piece (token). It leaves the choice alone, but while the
+/// app is in the background and has used up its CPU budget, decoding waits here. Without it the budget
+/// could only pause between whole pieces of audio, and one hard piece (Whisper retrying it at higher
+/// temperatures) could use a full minute of CPU on its own.
+final class CPUPauseFilter: LogitsFiltering {
+    private let budget: CPUBudget
+
+    init(budget: CPUBudget = .shared) {
+        self.budget = budget
+    }
+
+    func filterLogits(_ logits: MLMultiArray, withTokens tokens: [Int]) -> MLMultiArray {
+        budget.throttle(cancelled: { Task.isCancelled })
+        return logits
     }
 }

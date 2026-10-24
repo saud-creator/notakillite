@@ -1,3 +1,4 @@
+import CoreML
 import XCTest
 @testable import Mentality
 
@@ -18,7 +19,7 @@ final class WhisperEndToEndTests: XCTestCase {
         let audio = try await AudioPreparer.prepare(input: url, mode: .deepFilter, keepCleanedAudio: false, folder: TestAudio.folder()) { _ in }
         var options = TranscriptionPipeline.Options()
         options.language = language.whisperCode
-        let transcript = try await TranscriptionPipeline(engine: WhisperEngine.shared, options: options).run(audio: audio, checkpoint: nil) { _, _ in }
+        let transcript = try await TranscriptionPipeline(engine: WhisperEngine.shared, options: options, device: DeviceInfo.kind).run(audio: audio, checkpoint: nil) { _, _ in }
         let markdown = LectureMarkdown.markdown(LectureInfo(title: url.lastPathComponent, course: "CI", number: 1, total: 1, sourceFile: url.lastPathComponent,
                                                             recording: "Recording", cleanup: audio.cleanupLabel), transcript: transcript, instructions: LectureMarkdown.defaultInstructions)
         let out = ProcessInfo.processInfo.environment["MENTALITY_E2E_OUT"].map { URL(fileURLWithPath: $0) }
@@ -45,5 +46,30 @@ final class WhisperEndToEndTests: XCTestCase {
         let arabicLetters = text.unicodeScalars.filter { (0x0600...0x06FF).contains($0.value) }.count
         XCTAssertGreaterThan(arabicLetters, 10, "expected Arabic script, got: \(text)")
         XCTAssertEqual(transcript.languages.max(by: { $0.value < $1.value })?.key, "ar")
+    }
+}
+
+/// Whisper's decoding waits before each token while the app is in the background and over its CPU budget.
+final class WhisperCPUPauseTests: XCTestCase {
+    func testDecodingWaitsBeforeEachTokenOnlyInTheBackground() throws {
+        let budget = CPUBudget(backgroundShare: 0.3, window: 2)
+        let filter = CPUPauseFilter(budget: budget)
+        let logits = try MLMultiArray(shape: [1, 4], dataType: .float32)
+        _ = budget.share()
+        let start = Date()
+        var x = 0.0
+        while Date().timeIntervalSince(start) < 1.2 { x += sin(x + 1) }   // a busy second
+        XCTAssertFalse(x.isNaN)
+
+        var began = Date()
+        XCTAssertTrue(filter.filterLogits(logits, withTokens: [1, 2]) === logits, "the word choice is left alone")
+        XCTAssertLessThan(Date().timeIntervalSince(began), 0.1, "in the foreground decoding never waits")
+
+        budget.setLimited(true)
+        began = Date()
+        _ = filter.filterLogits(logits, withTokens: [1, 2])
+        let waited = Date().timeIntervalSince(began)
+        XCTAssertGreaterThan(waited, 0.5, "in the background decoding waits until CPU use is back under the budget")
+        XCTAssertLessThan(waited, 5)
     }
 }

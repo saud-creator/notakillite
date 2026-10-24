@@ -1,0 +1,140 @@
+name: Whisper check
+
+# Why does Whisper write (almost) no text on the iPadOS 18 simulator when the same test passes on the
+# iOS 27 iPhone simulator? The same speech goes through Whisper built with Xcode 16 and Xcode 26, on
+# iOS 18.6 and iOS 26 simulators of the same macOS 15 runner, and on the iPhone as the working
+# reference. Each job prints "DIAG" lines (model input and output statistics, language, tokens, text)
+# to compare. Runs when this check changes, or by hand.
+
+on:
+  push:
+    branches: [mentality]
+    paths:
+      - .github/workflows/whisper-check.yml
+      - App/Sources/Transcription/WhisperDiagnosis.swift
+      - Tests/Unit/WhisperDiagnosticTests.swift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: ${{ matrix.title }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - title: Xcode 16 · iPad · iOS 18
+            runner: macos-15
+            xcode: "16"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: Xcode 26 · iPad · iOS 18
+            runner: macos-15
+            xcode: "26"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: Xcode 26 · iPad · iOS 26
+            runner: macos-15
+            xcode: "26"
+            os: "26"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: Xcode 27 · iPhone 15 Pro · iOS 27 (reference)
+            runner: xcode-27
+            xcode: ""
+            os: "27"
+            prefer: iPhone 15 Pro
+            create: com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: |
+          if [ -n "${{ matrix.xcode }}" ]; then
+            XCODE=$(ls -d /Applications/Xcode_${{ matrix.xcode }}*.app 2>/dev/null | sort -V | tail -1)
+            if [ -z "$XCODE" ]; then echo "::error::No Xcode ${{ matrix.xcode }} on this runner"; ls -d /Applications/Xcode*.app; exit 1; fi
+            sudo xcode-select -s "$XCODE"
+          fi
+          xcodebuild -version
+          sw_vers -productVersion
+          xcrun simctl list runtimes | grep -i ios
+
+      - name: Restore the noise models
+        id: noise-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            Packages/NoiseModels/DeepFilter.xcframework
+            Packages/NoiseModels/Sources/CRNNoise
+            Packages/NoiseModels/Sources/NoiseModels/Resources
+            Packages/NoiseModels/TestAssets
+            Packages/NoiseModels/.built-v3
+          key: noise-models-${{ matrix.runner }}-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
+
+      - name: Build the noise models
+        if: steps.noise-cache.outputs.cache-hit != 'true'
+        run: |
+          if ! command -v rustup >/dev/null; then
+            curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup update stable --no-self-update
+          rustup default stable
+          bash scripts/build-noise-models.sh
+
+      - name: Generate the Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Restore Swift packages
+        uses: actions/cache/restore@v4
+        with:
+          path: build/spm
+          key: spm-${{ matrix.runner }}-${{ hashFiles('project.yml') }}
+
+      - name: Restore the Whisper test model
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/mentality-models
+          key: whisper-base-v1
+
+      - name: Simulator
+        run: |
+          SIM=$(python3 ci/pick-simulator.py --os "${{ matrix.os }}" --prefer "${{ matrix.prefer }}" --create "${{ matrix.create }}")
+          echo "SIM=$SIM" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIM" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIM" -b
+
+      - name: Spoken test lectures
+        run: bash ci/make-speech.sh "$RUNNER_TEMP/speech" | grep -E '^[A-Z0-9_]+=' | tee -a "$GITHUB_ENV"
+
+      - name: Build
+        run: |
+          set -o pipefail
+          mkdir -p build
+          xcodebuild build-for-testing -project Mentality.xcodeproj -scheme Mentality \
+            -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
+            -skipPackagePluginValidation -skipMacroValidation CODE_SIGNING_ALLOWED=NO \
+            | tee build/build.log | grep -E "error:|\*\* .*(SUCCEEDED|FAILED) \*\*" || true
+          grep -q "\*\* TEST BUILD SUCCEEDED \*\*" build/build.log
+
+      - name: Whisper diagnosis and end-to-end tests
+        env:
+          TEST_RUNNER_MENTALITY_WHISPER_DIAG: "1"
+          TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
+        run: |
+          set -o pipefail
+          xcodebuild test-without-building -project Mentality.xcodeproj -scheme Mentality \
+            -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
+            -only-testing:MentalityTests/WhisperDiagnosticTests -only-testing:MentalityTests/WhisperEndToEndTests \
+            -only-testing:MentalityTests/WhisperCPUPauseTests -parallel-testing-enabled NO \
+            | tee build/whisper.log | grep -iE "^DIAG|error:|Test case '.*' (passed|failed|skipped)|Executed|\*\* TEST" || true
+          grep -qE "\*\* TEST (EXECUTE )?SUCCEEDED \*\*" build/whisper.log
