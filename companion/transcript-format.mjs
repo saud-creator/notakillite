@@ -22,13 +22,14 @@ export function paragraphs(segments, { pause = 2, maxSeconds = 60 } = {}) {
   for (const segment of segments) {
     const text = String(segment.text || '').replace(/\s+/g, ' ').trim();
     if (!text) continue;
+    if (segment.marker) { result.push({ start: segment.start, end: segment.end, parts: [text], marker: true }); current = undefined; continue; }
     const gap = current ? segment.start - current.end : Infinity;
     if (!current || gap >= pause || segment.end - current.start > maxSeconds) {
       current = { start: segment.start, end: segment.end, parts: [text] };
       result.push(current);
     } else { current.parts.push(text); current.end = segment.end; }
   }
-  return result.map(item => ({ start: item.start, end: item.end, text: item.parts.join(' ') }));
+  return result.map(item => ({ start: item.start, end: item.end, text: item.parts.join(' '), ...(item.marker ? { marker: true } : {}) }));
 }
 
 export const AI_PROMPT = [
@@ -38,10 +39,20 @@ export const AI_PROMPT = [
 ];
 
 export function wordCount(segments) {
-  return segments.reduce((total, segment) => total + (String(segment.text || '').match(/\S+/g)?.length || 0), 0);
+  return segments.reduce((total, segment) => total + (segment.marker ? 0 : String(segment.text || '').match(/\S+/g)?.length || 0), 0);
 }
 
-export function lectureMarkdown({ title, recording, sourceFile, duration, cleanup, transcript, createdAt = new Date(), includePrompt = true, number, total }) {
+/** Human-readable quality line for the transcript header and the index. */
+export function qualityLabel(quality) {
+  if (!quality) return '';
+  const parts = n => `${n} part${n === 1 ? '' : 's'}`;
+  const artifacts = quality.artifactsRemoved ? `; ${quality.artifactsRemoved} known Whisper artifact${quality.artifactsRemoved === 1 ? '' : 's'} removed (e.g. "Subtitles by…" credits)` : '';
+  if (quality.status === 'needs-review') return `needs review — ${parts(quality.unresolved.length)} could not be transcribed reliably${artifacts}`;
+  if (quality.status === 'repaired') return `repaired — ${parts(quality.repairs.length)} re-transcribed after the automatic quality check${artifacts}`;
+  return `ok — passed the automatic quality check${artifacts}`;
+}
+
+export function lectureMarkdown({ title, recording, sourceFile, duration, cleanup, transcript, createdAt = new Date(), includePrompt = true, number, total, quality }) {
   const blocks = paragraphs(transcript.segments);
   const language = LANGUAGE_NAMES[transcript.language] || transcript.language || 'Auto-detected';
   const lines = [
@@ -55,16 +66,21 @@ export function lectureMarkdown({ title, recording, sourceFile, duration, cleanu
     `noise_cleanup: ${yaml(cleanup)}`,
     `transcribed_with: ${yaml(`${transcript.model}${transcript.device ? ` (${transcript.device})` : ''}`)}`,
     `words: ${wordCount(transcript.segments)}`,
+    ...(quality ? [`quality: ${yaml(qualityLabel(quality))}`] : []),
     `created: ${yaml(new Date(createdAt).toISOString().slice(0, 10))}`,
     '---',
     '',
     `# ${title}`,
     '',
   ];
+  if (quality?.status === 'needs-review') lines.push(`> ⚠ **Needs review:** ${qualityLabel(quality).replace(/^needs review — /, '')}. Those parts are marked below with ⚠; the rest passed the quality check. Do not treat the marked parts as complete.`, '');
   if (includePrompt) lines.push(...AI_PROMPT.map(line => `> ${line}`), '');
   lines.push('## Transcript', '');
   if (!blocks.length) lines.push('_No speech was detected in this recording._', '');
-  for (const block of blocks) lines.push(`**[${timestamp(block.start)}]** ${block.text}`, '');
+  for (const block of blocks) {
+    if (block.marker) lines.push(`> ⚠ **[${timestamp(block.start)}–${timestamp(block.end)}]** ${block.text}`, '');
+    else lines.push(`**[${timestamp(block.start)}]** ${block.text}`, '');
+  }
   return `${lines.join('\n').trimEnd()}\n`;
 }
 
@@ -77,12 +93,15 @@ export function indexMarkdown({ title, lectures, createdAt = new Date() }) {
     '',
     'Upload the numbered `.md` files to ChatGPT or Claude (one chat for the whole course works well). Each file has the lecture\'s transcript with timestamps and a suggested request at the top.',
     '',
-    '| # | Lecture | Length | Words | Transcript |',
-    '|---|---|---|---|---|',
   ];
+  // The Quality column appears only when quality results are available (keeps older indexes unchanged).
+  const withQuality = lectures.some(item => item.quality);
+  lines.push(withQuality ? '| # | Lecture | Length | Words | Quality | Transcript |' : '| # | Lecture | Length | Words | Transcript |', withQuality ? '|---|---|---|---|---|---|' : '|---|---|---|---|---|');
+  const badge = { ok: '✓ ok', repaired: '✓ repaired', 'needs-review': '⚠ needs review' };
   for (const item of lectures) {
     const cell = value => String(value ?? '').replaceAll('|', '\\|');
-    lines.push(`| ${item.number} | ${cell(item.title)} | ${timestamp(item.duration)} | ${item.words ?? ''} | ${item.transcript ? `[${cell(item.transcript)}](<${item.transcript}>)` : '—'} |`);
+    const link = item.transcript ? `[${cell(item.transcript)}](<${item.transcript}>)` : '—';
+    lines.push(`| ${item.number} | ${cell(item.title)} | ${timestamp(item.duration)} | ${item.words ?? ''} | ${withQuality ? `${badge[item.quality] || '—'} | ` : ''}${link} |`);
   }
   return `${lines.join('\n')}\n`;
 }

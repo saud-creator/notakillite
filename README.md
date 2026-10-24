@@ -38,6 +38,7 @@ Five lectures in → five transcripts out, numbered in the order you imported th
 - The CPU build of whisper.cpp is bundled; CI also compiles the **Vulkan** build (AMD, NVIDIA and Intel GPUs) into the released EXE. If the GPU can't be used, the app falls back to the CPU automatically.
 - Transcripts are made from the **cleaned** audio by default. Noise removal can occasionally soften quiet words; if a transcript misses things, export again with **Original audio** for comparison.
 - The Groq key is stored encrypted for your Windows account (DPAPI) and is only sent to Groq.
+- **Automatic quality check** (since 0.8): every transcript is audited for repetition loops, invented text and missing speech. Failing parts are re-transcribed automatically from the source audio; anything that still can't be transcribed reliably is marked `⚠` in the file and the lecture shows **Needs review** instead of "Ready for AI". Background: [transcription reliability report](docs/transcription-reliability.md).
 
 ## Command line
 

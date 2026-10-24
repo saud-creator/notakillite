@@ -61,11 +61,13 @@ public class JobModel
     public string Phase => Value.Text("phase");
     public string Error => Value.Text("error");
     public string Engine => (Value.Get("options").Text("engine") switch { "deepfilter" => "DeepFilterNet3", "rnnoise" => "RNNoise", "hybrid" => "Both engines", "none" => "Original", _ => "Light cleanup" }) + (Value.Get("options").Bool("transcribe") ? Value.Get("options").Text("transcriber") == "groq" ? " · Groq transcript" : " · Whisper transcript" : "");
-    public bool HasTranscript => Status == "done" && Value.Text("transcriptPath").Length > 0;
+    public bool HasTranscript => Status is "done" or "needs-review" && Value.Text("transcriptPath").Length > 0;
+    public bool NeedsReview => Status == "needs-review";
+    public string RetryLabel => NeedsReview ? "Retry from original" : "Retry";
     public double Progress => double.TryParse(Value.Text("fraction"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var progress) ? progress * 100 : 0;
     public bool Indeterminate => Status == "running" && Value.Get("fraction").ValueKind != JsonValueKind.Number;
-    public string Badge => Status switch { "done" => "✓", "running" => "●", "queued" => "◷", "cancelled" => "−", _ => "!" };
+    public string Badge => Status switch { "done" => "✓", "running" => "●", "queued" => "◷", "cancelled" => "−", "needs-review" => "⚠", _ => "!" };
     public bool CanCancel => Status is "queued" or "running";
-    public bool CanRetry => Status is "error" or "interrupted" or "cancelled";
-    public bool CanPlay => Status == "done" && Value.Get("files").Rows().Any();
+    public bool CanRetry => Status is "error" or "interrupted" or "cancelled" or "needs-review";
+    public bool CanPlay => Status is "done" or "needs-review" && Value.Get("files").Rows().Any();
 }

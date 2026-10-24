@@ -49,8 +49,12 @@ try {
       const line = `${String(job.order).padStart(2, '0')} ${job.title} · ${job.status === 'running' ? job.phase : job.status}`;
       if (seen.get(job.id) !== line) { seen.set(job.id, line); console.log(line); }
     }
-    if (jobs.every(job => ['done', 'error', 'cancelled', 'interrupted'].includes(job.status))) {
-      for (const job of jobs) if (job.status !== 'done') { exitCode = 1; console.error(`✖ ${job.title}: ${job.error}`); }
+    if (jobs.every(job => ['done', 'needs-review', 'error', 'cancelled', 'interrupted'].includes(job.status))) {
+      for (const job of jobs) {
+        if (job.status === 'needs-review') { exitCode = 3; console.warn(`⚠ ${job.title}: ${job.phase}`); }
+        else if (job.status !== 'done') { exitCode = 1; console.error(`✖ ${job.title}: ${job.error}`); }
+        else console.log(`✓ ${job.title}: ${job.phase}`);
+      }
       const folder = jobs.find(job => job.destination)?.destination;
       if (folder) console.log(`\nSaved to ${folder}`);
       break;

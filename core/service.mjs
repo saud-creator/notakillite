@@ -12,14 +12,15 @@ import { availableEngines, requireEngine, settings, assets, ENGINE_NAMES, TRANSC
 import { processAudio, runTool, safeName } from '../companion/audio.mjs';
 import { expandImports, extractEntry, zipEntries } from '../companion/notability-import.mjs';
 import { transcribeAudio } from '../companion/transcribe.mjs';
-import { indexMarkdown, lectureMarkdown, wordCount } from '../companion/transcript-format.mjs';
+import { indexMarkdown, lectureMarkdown, qualityLabel, wordCount } from '../companion/transcript-format.mjs';
+import { appendFileSync, mkdirSync } from 'node:fs';
 import { ensureModel, whisperStatus, WHISPER_MODELS } from '../companion/whisper.mjs';
 
-const terminal = ['done', 'cancelled', 'error', 'interrupted'];
+const terminal = ['done', 'needs-review', 'cancelled', 'error', 'interrupted'];
 const defaults = { engine: 'deepfilter', strength: 'balanced', splitMinutes: 0, audioOnly: false, search: '', folder: '', theme: 'dark', windowWidth: 1280, windowHeight: 860, selectedNote: '', expandedFolders: [], folderExpansionSaved: false, queueExpanded: false, ...TRANSCRIPT_DEFAULTS };
 export class CoreService extends EventEmitter {
-  constructor({ dataRoot, connector, browserOptions } = {}) {
-    super(); this.paths = pathsFor(dataRoot); this.modelsDir = process.env.NOTAKILLITE_MODELS_DIR || this.paths.models; this.secrets = {}; this.options = { connector, browserOptions }; this.connection = 'Starting'; this.detail = ''; this.revision = 0;
+  constructor({ dataRoot, connector, browserOptions, transcribe } = {}) {
+    super(); this.paths = pathsFor(dataRoot); this.modelsDir = process.env.NOTAKILLITE_MODELS_DIR || this.paths.models; this.secrets = {}; this.options = { connector, browserOptions, transcribe }; this.connection = 'Starting'; this.detail = ''; this.revision = 0;
   }
   async init() {
     await preparePaths(this.paths);
@@ -239,14 +240,17 @@ export class CoreService extends EventEmitter {
         await rm(work, { recursive: true, force: true }); await mkdir(work);
         const cleaned = manifest.files.map(file => path.join(staging, file.name));
         const fromOriginal = job.options.transcribeFrom === 'original' || job.options.engine === 'none';
-        const result = await transcribeAudio({ ffmpeg, inputs: fromOriginal ? [input] : cleaned, work, options: job.options, secrets: this.secrets, modelsDir: this.modelsDir, signal,
+        // The original audio stays available so failing parts can be re-transcribed from it.
+        const result = await (this.options.transcribe || transcribeAudio)({ ffmpeg, inputs: fromOriginal ? [input] : cleaned, originalInputs: fromOriginal ? undefined : [input], work, options: job.options, secrets: this.secrets, modelsDir: this.modelsDir, signal,
+          log: event => this.jobLog(job, event),
           onStage: stage => this.save(job, { phase: stage.phase, fraction: 0.6 + stage.fraction * 0.38 }) });
         await rm(work, { recursive: true, force: true });
         const sourceFile = job.archive ? path.basename(job.archive) : job.localFile ? path.basename(job.localFile) : 'Notability web library';
         const cleanup = `${ENGINE_NAMES[job.options.engine]}${fromOriginal && job.options.engine !== 'none' ? ' (transcribed from the original audio)' : ''}`;
-        const markdown = lectureMarkdown({ title: job.title, recording: job.recordingName, sourceFile, duration: result.duration, cleanup, transcript: result, includePrompt: job.options.aiPrompt, number: batch ? job.order : undefined, total: batch ? job.batchSize : undefined });
+        const markdown = lectureMarkdown({ title: job.title, recording: job.recordingName, sourceFile, duration: result.duration, cleanup, transcript: result, includePrompt: job.options.aiPrompt, number: batch ? job.order : undefined, total: batch ? job.batchSize : undefined, quality: result.quality });
         await writeFile(path.join(staging, 'transcript.md'), markdown, 'utf8');
-        transcript = { engine: result.engine, model: result.model, device: result.device, language: result.language, words: wordCount(result.segments), seconds: result.duration };
+        transcript = { engine: result.engine, model: result.model, device: result.device, language: result.language, words: wordCount(result.segments), seconds: result.duration,
+          quality: result.quality.status, qualityLabel: qualityLabel(result.quality), repaired: result.quality.repairs.length, unresolved: result.quality.unresolved.map(u => ({ start: u.start, end: u.end, reasons: u.reasons })) };
         manifest.transcript = { file: 'transcript.md', ...transcript };
         await writeFile(path.join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2));
       }
@@ -266,10 +270,18 @@ export class CoreService extends EventEmitter {
       const files = manifest.files.map(file => ({ ...file, name: renamed.get(file.name) || file.name, path: path.join(destination, renamed.get(file.name) || file.name) }));
       const transcriptPath = transcript ? path.join(destination, renamed.get('transcript.md') || 'transcript.md') : null;
       if (transcriptPath) files.push({ name: path.basename(transcriptPath), path: transcriptPath, kind: 'transcript', bytes: (await stat(transcriptPath)).size });
-      await rm(directory, { recursive: true, force: true }).catch(() => {});
+      // Quality gate: only a transcript that passed (or was repaired) is "Ready for AI". Otherwise the
+      // job ends as "Needs review" and keeps its source audio so it can be retried from the original.
+      const review = transcript?.quality === 'needs-review';
+      if (!review) await rm(directory, { recursive: true, force: true }).catch(() => {});
+      else for (const name of await readdir(directory).catch(() => [])) if (/^denoise-|^transcribe$/.test(name)) await rm(path.join(directory, name), { recursive: true, force: true }).catch(() => {});
       Object.assign(job, { transcriptPath, transcript: transcript || null });
       if (batch && transcript) await this.writeIndex(job).catch(() => {});
-      this.save(job, { status: 'done', phase: transcript ? `Ready for AI · ${transcript.words.toLocaleString('en-US')} words` : 'Ready for AI', fraction: 1, files, finishedAt: new Date().toISOString(), input: null });
+      const ready = transcript ? `Ready for AI · ${transcript.words.toLocaleString('en-US')} words${transcript.quality === 'repaired' ? ` · ${transcript.repaired} part${transcript.repaired === 1 ? '' : 's'} repaired` : ''}` : 'Ready for AI';
+      const parts = transcript?.unresolved?.length || 0;
+      this.save(job, review
+        ? { status: 'needs-review', phase: `Needs review · ${parts} part${parts === 1 ? '' : 's'} could not be transcribed reliably`, fraction: 1, files, finishedAt: new Date().toISOString() }
+        : { status: 'done', phase: ready, fraction: 1, files, finishedAt: new Date().toISOString(), input: null });
     } catch (error) {
       const cancelled = signal.aborted;
       this.save(job, { status: this.closing ? 'interrupted' : cancelled ? 'cancelled' : 'error', phase: this.closing ? 'Interrupted — retry available' : cancelled ? 'Cancelled' : 'Export needs attention', error: error.message, fraction: null });
@@ -280,9 +292,9 @@ export class CoreService extends EventEmitter {
     }
   }
   async writeIndex(job) {
-    const done = this.jobs.filter(item => item.batchId === job.batchId && (item === job || item.status === 'done') && item.transcriptPath).sort((a, b) => a.order - b.order);
+    const done = this.jobs.filter(item => item.batchId === job.batchId && (item === job || ['done', 'needs-review'].includes(item.status)) && item.transcriptPath).sort((a, b) => a.order - b.order);
     if (!done.length) return;
-    const markdown = indexMarkdown({ title: job.batchTitle || job.title, lectures: done.map(item => ({ number: item.order, title: item.title, duration: item.transcript?.seconds, words: item.transcript?.words, transcript: path.basename(item.transcriptPath) })) });
+    const markdown = indexMarkdown({ title: job.batchTitle || job.title, lectures: done.map(item => ({ number: item.order, title: item.title, duration: item.transcript?.seconds, words: item.transcript?.words, quality: item.transcript?.quality, transcript: path.basename(item.transcriptPath) })) });
     const target = path.join(job.destination, '00 - Index.md'), temporary = `${target}.partial`;
     await writeFile(temporary, markdown, 'utf8'); await rename(temporary, target);
   }
@@ -301,10 +313,24 @@ export class CoreService extends EventEmitter {
     if (this.active?.id === id) this.abort.abort();
     else if (job.status === 'queued') this.save(job, { status: 'cancelled', phase: 'Cancelled' });
   }
-  async retry(id) {
+  async retry(id, { fromOriginal = false } = {}) {
     const job = this.jobs.find(job => job.id === id);
-    if (!job || !['error', 'interrupted', 'cancelled'].includes(job.status)) throw new Error('Choose an interrupted or failed job to retry.');
+    if (!job || !['error', 'interrupted', 'cancelled', 'needs-review'].includes(job.status)) throw new Error('Choose an interrupted, failed or needs-review job to retry.');
+    // "Needs review" retries transcribe from the original (un-cleaned) audio by default.
+    if (fromOriginal || job.status === 'needs-review') job.options = { ...job.options, transcribeFrom: 'original' };
     this.save(job, { status: 'queued', phase: 'Queued for retry', error: null, fraction: 0 }); void this.pump();
+  }
+  /** Structured per-job diagnostics (no audio, no transcript text). */
+  jobLog(job, event) {
+    try {
+      const directory = path.join(this.paths.logs, 'jobs');
+      mkdirSync(directory, { recursive: true });
+      appendFileSync(path.join(directory, `${job.id}.jsonl`), `${JSON.stringify({ time: new Date().toISOString(), job: job.id, ...event })}\n`);
+    } catch { /* diagnostics must never break a job */ }
+  }
+  async diagnostics(id) {
+    const file = path.join(this.paths.logs, 'jobs', `${id}.jsonl`);
+    return { path: file, text: await readFile(file, 'utf8').catch(() => '') };
   }
   savePreferences(data) {
     const allowed = [...Object.keys(TRANSCRIPT_DEFAULTS), 'engine', 'strength', 'splitMinutes', 'audioOnly', 'search', 'folder', 'windowWidth', 'windowHeight', 'outputPath', 'theme', 'selectedNote', 'expandedFolders', 'folderExpansionSaved', 'queueExpanded'];
@@ -335,8 +361,9 @@ export class CoreService extends EventEmitter {
       case 'downloadModel': return this.downloadModel(data.model || this.preferences.model);
       case 'preferences': return this.savePreferences(data);
       case 'cancel': await this.cancel(data.id); return {};
-      case 'retry': await this.retry(data.id); return {};
-      case 'clearCompleted': for (const job of this.jobs.filter(job => job.status === 'done')) this.store.removeJob(job.id); this.jobs = this.jobs.filter(job => job.status !== 'done'); this.changed(); return {};
+      case 'retry': await this.retry(data.id, { fromOriginal: Boolean(data.fromOriginal) }); return {};
+      case 'diagnostics': return this.diagnostics(data.id);
+      case 'clearCompleted': for (const job of this.jobs.filter(job => job.status === 'done')) this.store.removeJob(job.id); this.jobs = this.jobs.filter(job => job.status !== 'done'); // "Needs review" stays visible until handled this.changed(); return {};
       case 'reveal': {
         const job = this.jobs.find(job => job.id === data.id); const target = job?.destination || this.preferences.outputPath || this.paths.exports;
         spawn('explorer.exe', [target], { detached: true, windowsHide: true, stdio: 'ignore' }).unref(); return {};

@@ -21,6 +21,40 @@ export function parseSilences(stderr) {
   return silences;
 }
 
+/**
+ * Finds pauses relative to the recording's own noise floor. A fixed threshold fails on cleaned,
+ * loudness-normalised lectures (pauses at -37 to -42 dB with short peaks above -35 dB, so ffmpeg's
+ * silencedetect found none in a 42-minute lecture). Levels are read as they stream: spawnLines keeps
+ * only the last 20 KB of stderr.
+ */
+export async function detectSilences(ffmpeg, wav, { signal, minSeconds = 0.4, windowSeconds = 0.1 } = {}) {
+  const levels = [];
+  await spawnLines(ffmpeg, ['-hide_banner', '-nostdin', '-i', wav, '-af', `aresample=16000,asetnsamples=n=${Math.round(16000 * windowSeconds)}:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level`, '-f', 'null', '-'], {
+    signal, onLine: line => { const m = /RMS_level=(-?[\d.]+|-inf)/.exec(line); if (m) levels.push(m[1] === '-inf' ? -120 : Number(m[1])); },
+  });
+  return silencesFromLevels(levels, { windowSeconds, minSeconds });
+}
+
+/** Pauses = runs of windows within 6 dB of the noise floor (10th percentile), at least `minSeconds` long. */
+export function silencesFromLevels(levels, { windowSeconds = 0.1, minSeconds = 0.4, margin = 6 } = {}) {
+  if (!levels.length) return [];
+  const sorted = [...levels].sort((a, b) => a - b);
+  const floor = sorted[Math.floor((sorted.length - 1) * 0.1)];
+  const threshold = Math.min(-25, Math.max(-60, floor + margin));
+  const out = [];
+  let start = -1;
+  for (let i = 0; i <= levels.length; i++) {
+    const quiet = i < levels.length && levels[i] < threshold;
+    if (quiet && start < 0) start = i;
+    if (!quiet && start >= 0) {
+      if ((i - start) * windowSeconds >= minSeconds) out.push({ start: +(start * windowSeconds).toFixed(2), end: +(i * windowSeconds).toFixed(2) });
+      start = -1;
+    }
+  }
+  out.threshold = threshold;
+  return out;
+}
+
 /** Picks cut points in pauses near every 10 minutes so no word is split between two requests. */
 export function chooseCuts(duration, silences, target = CHUNK_SECONDS, window = 90) {
   const cuts = [0];
@@ -65,8 +99,7 @@ export async function groqRequest({ file, key, model, language, prompt, signal, 
 export async function transcribeGroq({ ffmpeg, wav, duration, key, model = 'turbo', language = 'auto', vocabulary = '', work, signal, onStage = () => {}, runTool, fetchImpl }) {
   if (!key) throw new Error('Add your free Groq API key in Settings, or switch the transcript engine to Whisper on this PC.');
   onStage({ phase: 'Finding pauses for upload', fraction: 0.02 });
-  const silence = await spawnLines(ffmpeg, ['-hide_banner', '-nostdin', '-i', wav, '-af', 'silencedetect=noise=-35dB:d=0.4', '-f', 'null', '-'], { signal });
-  const parts = chooseCuts(duration, parseSilences(silence.stderr));
+  const parts = chooseCuts(duration, await detectSilences(ffmpeg, wav, { signal }));
   const segments = [];
   let detected;
   for (const [index, part] of parts.entries()) {

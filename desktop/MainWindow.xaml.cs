@@ -149,7 +149,7 @@ public partial class MainWindow : Window
                 QueueList.ItemsSource = jobs; QueueList.SelectedItem = jobs.FirstOrDefault(job => job.Id == selectedJobId);
             }
             var active = jobs.FirstOrDefault(job => job.Status == "running");
-            QueueHeading.Text = active is not null ? active.Phase : jobs.Any(job => job.Status == "queued") ? "Waiting to export" : jobs.Any(job => job.Status is "error" or "interrupted") ? "Export needs attention · Open queue to retry" : jobs.Any(job => job.Status == "done") ? $"{jobs.Count(job => job.Status == "done")} ready for AI" : "No exports yet";
+            QueueHeading.Text = active is not null ? active.Phase : jobs.Any(job => job.Status == "queued") ? "Waiting to export" : jobs.Any(job => job.Status is "error" or "interrupted") ? "Export needs attention · Open queue to retry" : jobs.Any(job => job.Status == "needs-review") ? $"{jobs.Count(job => job.Status == "needs-review")} transcript{(jobs.Count(job => job.Status == "needs-review") == 1 ? "" : "s")} need review · Open queue" : jobs.Any(job => job.Status == "done") ? $"{jobs.Count(job => job.Status == "done")} ready for AI" : "No exports yet";
             QueueToggle.Content = $"↓  Exports{(jobs.Count > 0 ? " · " + jobs.Count : "")}  {(queueExpanded ? "⌃" : "⌄")}";
             QueueList.Visibility = queueExpanded ? Visibility.Visible : Visibility.Collapsed;
             WelcomePanel.Visibility = notes.Count == 0 && state.Text("connection") != "Connected" ? Visibility.Visible : Visibility.Collapsed;
@@ -390,6 +390,7 @@ public partial class MainWindow : Window
     private async void OnOpenOutput(object sender, RoutedEventArgs e) => await Command("reveal");
     private async void OnClearCompleted(object sender, RoutedEventArgs e) => await Command("clearCompleted");
     private async void OnCancelJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("cancel", new { id = job.Id }); }
+    private async void OnCopyDiagnostics(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is not JobModel job) return; var result = await Command("diagnostics", new { id = job.Id }); var text = result?.Text("text") ?? ""; if (text.Length == 0) { ShowError("No diagnostics were recorded for this job."); return; } System.Windows.Clipboard.SetText(text); StatusText.Text = "Diagnostics copied (no audio or transcript text)."; }
     private async void OnRetryJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("retry", new { id = job.Id }); }
     private async void OnRevealJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("reveal", new { id = job.Id }); }
     private void OnCopyJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) { var file = job.Value.Get("files").Rows().FirstOrDefault().Text("path"); if (File.Exists(file)) { System.Windows.Clipboard.SetText(file); StatusText.Text = "Audio path copied."; } else ShowError("The output file was moved or deleted."); } }
