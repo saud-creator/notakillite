@@ -3,11 +3,16 @@ import Foundation
 
 /// Finds pauses and speech in a recording, and plans the pieces Whisper transcribes.
 ///
-/// The silence threshold adapts to each recording (its noise floor + 6 dB, kept between −60 and
-/// −25 dB). A fixed threshold fails on cleaned, loudness-normalised audio, where pauses sit well above
-/// −35 dB. Ported from Notakillite's `silencesFromLevels` / `chooseCuts`.
+/// Levels are measured in the speech band (above 100 Hz), so mains hum and air-conditioning rumble
+/// neither hide a quiet lecturer nor count as speech. The silence threshold adapts to each recording
+/// (its noise floor + 4 dB, kept between −60 and −25 dB). A fixed threshold fails on cleaned,
+/// loudness-normalised audio, where pauses sit well above −35 dB. Ported from Notakillite's
+/// `silencesFromLevels` / `chooseCuts`.
 enum SpeechDetector {
     static let windowSeconds = 0.1
+    /// How far above the noise floor speech starts. 4 dB still finds most speech in a noisy room
+    /// (speech 8 dB above the noise); cleaned audio has its floor far below the −60 dB limit anyway.
+    static let margin = 4.0
 
     struct Analysis: Sendable {
         var levels: [Double]          // dBFS per 100 ms
@@ -38,12 +43,13 @@ enum SpeechDetector {
         return max(-120, 20 * log10(Double(rms) + 1e-10))
     }
 
-    /// dBFS of every 100 ms window.
+    /// Speech-band dBFS of every 100 ms window.
     static func levels(of url: URL) throws -> ([Double], Double) {
         let file = try AVAudioFile(forReading: url)
         let rate = file.processingFormat.sampleRate
         let window = AVAudioFrameCount(rate * windowSeconds)
         let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: window * 600)!
+        var band = SpeechBand(sampleRate: rate)
         var levels: [Double] = []
         levels.reserveCapacity(Int(Double(file.length) / Double(window)) + 1)
         while file.framePosition < file.length {
@@ -52,6 +58,7 @@ enum SpeechDetector {
             guard buffer.frameLength > 0, let channel = buffer.floatChannelData?[0] else { break }
             var offset = 0
             let count = Int(buffer.frameLength)
+            band.apply(channel, count: count)
             while offset < count {
                 let n = min(Int(window), count - offset)
                 levels.append(level(UnsafeBufferPointer(start: channel + offset, count: n)))
@@ -64,7 +71,10 @@ enum SpeechDetector {
     static func levels(of samples: [Float], rate: Double = 16_000) -> [Double] {
         let window = Int(rate * windowSeconds)
         var levels: [Double] = []
-        samples.withUnsafeBufferPointer { all in
+        var filtered = samples
+        var band = SpeechBand(sampleRate: rate)
+        filtered.withUnsafeMutableBufferPointer { if let base = $0.baseAddress { band.apply(base, count: $0.count) } }
+        filtered.withUnsafeBufferPointer { all in
             var offset = 0
             while offset < all.count {
                 let n = min(window, all.count - offset)
@@ -76,7 +86,7 @@ enum SpeechDetector {
     }
 
     /// Pauses of at least `minSeconds` below an adaptive threshold.
-    static func silences(_ levels: [Double], minSeconds: Double = 0.4, margin: Double = 6) -> ([TimeRange], Double) {
+    static func silences(_ levels: [Double], minSeconds: Double = 0.4, margin: Double = SpeechDetector.margin) -> ([TimeRange], Double) {
         guard !levels.isEmpty else { return ([], -60) }
         let sorted = levels.sorted()
         let floor = sorted[Int(Double(sorted.count - 1) * 0.1)]
@@ -172,6 +182,50 @@ enum SpeechDetector {
         }
         parts.append(TimeRange(start: cursor, end: range.end))
         return parts
+    }
+}
+
+/// The speech band for level measurement: two 100 Hz high-pass stages (−24 dB per octave below it).
+/// Mains hum (50/60 Hz) and rumble drop out; a voice keeps nearly all of its energy.
+struct SpeechBand {
+    private var stages: [HighPass]
+
+    init(sampleRate: Double) {
+        stages = [HighPass(cutoff: 100, sampleRate: sampleRate), HighPass(cutoff: 100, sampleRate: sampleRate)]
+    }
+
+    mutating func apply(_ samples: UnsafeMutablePointer<Float>, count: Int) {
+        for i in stages.indices { stages[i].apply(samples, count: count) }
+    }
+}
+
+/// Second-order Butterworth high-pass filter: removes rumble and hum below the voice.
+struct HighPass {
+    private let b0, b1, b2, a1, a2: Double
+    private var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0
+
+    init(cutoff: Double, sampleRate: Double) {
+        let w0 = 2 * Double.pi * cutoff / sampleRate
+        let alpha = sin(w0) / 2.0.squareRoot()   // sin(w0) / (2 Q) with Q = 1/√2
+        let cosine = cos(w0)
+        let a0 = 1 + alpha
+        b0 = (1 + cosine) / 2 / a0
+        b1 = -(1 + cosine) / a0
+        b2 = (1 + cosine) / 2 / a0
+        a1 = -2 * cosine / a0
+        a2 = (1 - alpha) / a0
+    }
+
+    mutating func apply(_ samples: UnsafeMutablePointer<Float>, count: Int) {
+        for i in 0..<count {
+            let x = Double(samples[i])
+            let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+            x2 = x1
+            x1 = x
+            y2 = y1
+            y1 = y
+            samples[i] = Float(y)
+        }
     }
 }
 

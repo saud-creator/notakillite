@@ -50,6 +50,33 @@ enum TestAudio {
         try file.write(from: buffer)
     }
 
+    /// Room noise like ci/mix-noise.py: pink-ish hiss (air conditioning) plus 50 Hz mains hum and its
+    /// 150 Hz harmonic.
+    static func roomNoise(count: Int, rate: Double) -> [Float] {
+        var seed: UInt32 = 7
+        var b0 = 0.0, b1 = 0.0, b2 = 0.0
+        var noise = [Float](repeating: 0, count: count)
+        for i in noise.indices {
+            seed = seed &* 1_103_515_245 &+ 12345
+            let white = Double(seed % 2000) / 1000 - 1
+            b0 = 0.99765 * b0 + white * 0.0990460
+            b1 = 0.96300 * b1 + white * 0.2965164
+            b2 = 0.57000 * b2 + white * 1.0526913
+            let t = Double(i) / rate
+            noise[i] = Float((b0 + b1 + b2 + white * 0.1848) * 0.2 + 0.25 * sin(2 * .pi * 50 * t) + 0.08 * sin(2 * .pi * 150 * t))
+        }
+        return noise
+    }
+
+    /// Adds `noise` under `speech`, `snr` dB below the voice (measured where the voice is, as ci/mix-noise.py does).
+    static func mix(_ speech: [Float], _ noise: [Float], snr: Double) -> [Float] {
+        let voiced = speech.filter { abs($0) > 0.01 }
+        let speechPower = voiced.reduce(0) { $0 + Double($1 * $1) } / Double(max(1, voiced.count))
+        let noisePower = noise.reduce(0) { $0 + Double($1 * $1) } / Double(max(1, noise.count))
+        let gain = Float((speechPower / max(1e-12, noisePower) / pow(10, snr / 10)).squareRoot())
+        return zip(speech, noise).map { $0 + gain * $1 }
+    }
+
     /// Changes the sample rate by linear interpolation (good enough for test recordings).
     static func resample(_ samples: [Float], from source: Double, to target: Double) -> [Float] {
         guard !samples.isEmpty else { return [] }

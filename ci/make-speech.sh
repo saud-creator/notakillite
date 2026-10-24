@@ -9,8 +9,20 @@ OUT=$1; mkdir -p "$OUT"
 HERE=$(cd "$(dirname "$0")" && pwd)
 EN="Today we will study the anterior abdominal wall. [[slnc 2500]] This is very important for the exam. [[slnc 2500]] The inguinal ligament is formed by the external oblique aponeurosis. [[slnc 1500]] Remember the boundaries of the inguinal canal."
 AR="اليوم سوف ندرس جدار البطن الأمامي. [[slnc 2500]] هذه النقطة مهمة جدا للامتحان. [[slnc 2500]] الرباط الإربي يتكون من صفاق العضلة المائلة الخارجية."
-EN_VOICE=$(say -v '?' | awk '/en_US/ {print $1; exit}')
-AR_VOICE=$(say -v '?' | grep -E 'ar_' | head -1 | sed -E 's/ +[a-z]{2}_[A-Z0-9]{2,3} .*//' | sed -E 's/ +$//')
+VOICES=$(say -v '?')
+# A natural voice. The first en_US voice in the list is often "Albert", a croaky novelty voice that
+# neither noise removal nor speech recognition treats as a person.
+EN_VOICE=""
+for v in Samantha Alex Allison Ava Susan Tom Daniel Karen Moira Serena Fred; do
+  if grep -qE "^$v +en_" <<<"$VOICES"; then EN_VOICE=$v; break; fi
+done
+if [ -z "$EN_VOICE" ]; then
+  EN_VOICE=$(grep -E ' en_[A-Z]' <<<"$VOICES" \
+    | grep -vE '^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox) ' \
+    | head -1 | sed -E 's/ +[a-z]{2}_[A-Z0-9]{2,3} .*//' | sed -E 's/ +$//')
+fi
+AR_VOICE=$(grep -E ' ar_' <<<"$VOICES" | head -1 | sed -E 's/ +[a-z]{2}_[A-Z0-9]{2,3} .*//' | sed -E 's/ +$//')
+echo "English voice: ${EN_VOICE:-Samantha}; Arabic voice: ${AR_VOICE:-none (gTTS)}" >&2
 say -v "${EN_VOICE:-Samantha}" -o "$OUT/en.aiff" "$EN" && afconvert "$OUT/en.aiff" "$OUT/english-lecture.m4a" -d aac -f m4af \
   && echo "TEST_RUNNER_MENTALITY_E2E_EN=$OUT/english-lecture.m4a"
 if [ -n "$AR_VOICE" ] && say -v "$AR_VOICE" -o "$OUT/ar.aiff" "$AR"; then

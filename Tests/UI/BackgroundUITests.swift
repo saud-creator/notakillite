@@ -93,8 +93,9 @@ final class BackgroundUITests: XCTestCase {
             XCTAssertTrue(element(app, containing: "compressed, 626 MB").exists, "iPhone gets the compressed turbo model")
             XCTAssertTrue(element(app, containing: "compressed, 947 MB").exists, "iPhone gets the compressed large-v3")
         }
-        // Close the menu without changing the model.
-        app.navigationBars["Settings"].tap()
+        // Close the menu without changing the model: tap the title bar by position (on iPad the open menu
+        // covers the sheet, so XCTest would refuse to tap the bar as an element).
+        app.navigationBars["Settings"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(other.waitForNonExistence(timeout: 10), "the model menu closed")
 
         // The cloud option shows its model and key fields; then back to on-device.
@@ -170,7 +171,8 @@ final class BackgroundUITests: XCTestCase {
         let left = Date()
         var last = started
         var beats = Set<Int>()
-        var states: [String: Int] = [:]
+        var states: [String: Int] = [:]      // as XCTest sees the app
+        var ownStates: [String: Int] = [:]   // as the app itself reports it (UIApplication.applicationState)
         let timeout = Double(environment["MENTALITY_BACKGROUND_TIMEOUT"] ?? "") ?? 1_800
         let finalStates: Set<String> = ["done", "needsReview", "failed", "cancelled"]
         var log: [String] = []
@@ -187,10 +189,11 @@ final class BackgroundUITests: XCTestCase {
             if let now = readStatus(status) {
                 last = now
                 beats.insert(now.beat)
+                ownStates[now.appState, default: 0] += 1
             }
             if Date().timeIntervalSince(lastLog) >= 30 {
                 lastLog = Date()
-                let line = "\(Int(Date().timeIntervalSince(left))) s: app \(stateName), \(describe(last))"
+                let line = "\(Int(Date().timeIntervalSince(left))) s: app says \(last.appState) (XCTest: \(stateName)), \(describe(last))"
                 log.append(line)
                 print(line)
             }
@@ -205,7 +208,8 @@ final class BackgroundUITests: XCTestCase {
         var summary = [
             "Device: \(deviceLabel)",
             "Time in the background: \(Int(away)) s (the system gives an app about 30 s without a keep-alive)",
-            "App states seen every 2 s while away: \(states.sorted { $0.key < $1.key }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", "))",
+            "App state every 2 s while away, as the app reports it: \(ownStates.sorted { $0.key < $1.key }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", "))",
+            "App state as XCTest sees it: \(states.sorted { $0.key < $1.key }.map { "\($0.key) ×\($0.value)" }.joined(separator: ", ")) (the simulator does not always update this)",
             "Status updates received: \(beats.count) (the app rewrites its status every second while it runs)",
             "Highest 1-minute CPU use in the background: \(Int(peak * 100)) % of one core (the app's own limit \(Int(last.cpu.limit * 100)) %, the system's limit 80 %)",
             "Keep-alive: running \(last.keepAlive.running), silent audio playing \(last.keepAlive.audioPlaying) \(last.keepAlive.audioError)",

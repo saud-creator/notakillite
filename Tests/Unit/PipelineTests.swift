@@ -24,7 +24,8 @@ final class PipelineTests: XCTestCase {
         XCTAssertEqual(result.quality.attempts, 0)
         XCTAssertGreaterThan(result.words, 300)
         XCTAssertEqual(result.duration, 420, accuracy: 0.1)
-        XCTAssertEqual(result.speechSeconds, 336, accuracy: 3, "pauses are not counted as speech")
+        // 42 pauses of 2 s: each may lose one 100 ms window to the tone's edge. Counting the pauses would give 420.
+        XCTAssertEqual(result.speechSeconds, 336, accuracy: 6, "pauses are not counted as speech")
         XCTAssertEqual(result.languages.keys.sorted(), ["ar", "en"])
         XCTAssertEqual(engine.settingsSeen.first?.language, nil, "Auto detects the language of every piece")
         for (a, b) in zip(result.segments, result.segments.dropFirst()) { XCTAssertLessThanOrEqual(a.start, b.start) }

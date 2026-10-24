@@ -27,6 +27,37 @@ final class SpeechDetectorTests: XCTestCase {
         XCTAssertEqual(analysis.speechSeconds, 9, accuracy: 0.4)
     }
 
+    /// Real speech in a room with mains hum and air-conditioning noise only 8 dB below it, like the CI's
+    /// noisy lectures (ci/mix-noise.py). Measured in the speech band, most of the speech is still found;
+    /// measured over the full band with the old 6 dB margin, less than half of it was.
+    func testHumAndRoomNoiseDoNotHideSpeech() throws {
+        guard let assets = ProcessInfo.processInfo.environment["MENTALITY_NOISE_ASSETS"], !assets.isEmpty else {
+            throw XCTSkip("Set MENTALITY_NOISE_ASSETS (the CI workflow does) to test with real speech.")
+        }
+        let recording = try NoiseModelTests.read48k(URL(fileURLWithPath: assets).appendingPathComponent("clean_freesound_33711.wav"))
+        let voice = TestAudio.resample(recording, from: 48_000, to: 16_000)
+        // About two minutes of 3-second phrases from the recording, with 1.4 s pauses.
+        var clean = [Float](repeating: 0, count: 16_000)
+        var start = 0
+        while clean.count < 16_000 * 120 {
+            if start + 48_000 > voice.count { start = 0 }
+            clean += voice[start..<(start + 48_000)]
+            clean += [Float](repeating: 0, count: 22_400)
+            start += 37_000
+        }
+        let noisy = TestAudio.mix(clean, TestAudio.roomNoise(count: clean.count, rate: 16_000), snr: 8)
+        let folder = TestAudio.folder()
+        let cleanURL = folder.appendingPathComponent("clean.wav"), noisyURL = folder.appendingPathComponent("noisy.wav")
+        try TestAudio.write(clean, rate: 16_000, to: cleanURL)
+        try TestAudio.write(noisy, rate: 16_000, to: noisyURL)
+
+        let truth = try SpeechDetector.analyze(cleanURL).speechSeconds
+        let found = try SpeechDetector.analyze(noisyURL).speechSeconds
+        XCTAssertGreaterThan(truth, 70, "the test lecture has enough speech")
+        XCTAssertGreaterThan(found, truth * 0.8, "speech found in the noisy room: \(found) s of \(truth) s")
+        XCTAssertLessThan(found, truth + 15, "the pauses are still pauses: \(found) s of \(truth) s")
+    }
+
     func testChunksSkipLongSilencesAndStayShort() {
         let speech = [TimeRange(start: 1, end: 5), TimeRange(start: 5.8, end: 9), TimeRange(start: 30, end: 100), TimeRange(start: 200, end: 200.05)]
         let levels = Array(repeating: -20.0, count: 2100)

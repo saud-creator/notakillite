@@ -144,14 +144,21 @@ enum AudioPreparer {
             try render(decoded: decoded, isolation: isolation, speech: speech, cleaned: cleaned) { progress(0.25 + $0 * 0.72) }
         }
 
-        // 4. Safety net: if cleanup removed most of the voice, transcribe the original instead.
+        // 4. Safety net: if cleanup removed the voice itself (its loudest moments fell far), transcribe the
+        //    original instead, with only the rumble filter.
         let before = try levelSummary(original), after = try levelSummary(speech)
-        progress(1)
         if after.loud < before.loud - 20 || after.loud < -65 {
+            if used != .lowCut, (try? render(decoded: decoded, isolation: false, speech: speech, cleaned: cleaned, progress: { _ in })) != nil {
+                progress(1)
+                return PreparedAudio(original: original, speech: speech, cleanedM4A: cleaned, duration: duration,
+                                     cleanupLabel: "Rumble filter only (\(used.shortLabel.replacingOccurrences(of: " + rumble filter", with: "")) took away too much of the voice, so it was not used)")
+            }
             try? fm.removeItem(at: speech)
+            progress(1)
             return PreparedAudio(original: original, speech: original, cleanedM4A: cleaned, duration: duration,
                                  cleanupLabel: "None (cleanup removed too much of the voice, so the original audio was used)")
         }
+        progress(1)
         // Report what the cleanup did, measured on the background noise between words.
         let reduction = before.floor - after.floor
         let effect = reduction >= 1 ? "background noise \(Int(reduction.rounded())) dB lower" : "no measurable background noise to remove"
@@ -365,42 +372,15 @@ enum AudioPreparer {
         if out.frameLength > 0 { try file.write(from: out) }
     }
 
-    /// Loudness of the louder half of the recording (speech) and its noise floor (10th percentile), in dBFS.
+    /// Loudness of the loudest tenth of the recording (the voice at its strongest) and its noise floor
+    /// (10th percentile), in speech-band dBFS. The loudest tenth is speech in any lecture, so good noise
+    /// removal leaves it nearly unchanged; the louder half would also hold the noise between sentences
+    /// and could fall by 20 dB when that noise is removed well.
     static func levelSummary(_ url: URL) throws -> (loud: Double, floor: Double) {
         let (levels, _) = try SpeechDetector.levels(of: url)
         guard !levels.isEmpty else { return (-120, -120) }
         let sorted = levels.sorted()
-        let loud = sorted.suffix(max(1, sorted.count / 2))
+        let loud = sorted.suffix(max(1, sorted.count / 10))
         return (loud.reduce(0, +) / Double(loud.count), sorted[Int(Double(sorted.count - 1) * 0.1)])
-    }
-}
-
-/// Second-order Butterworth high-pass filter: removes rumble and hum below the voice.
-struct HighPass {
-    private let b0, b1, b2, a1, a2: Double
-    private var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0
-
-    init(cutoff: Double, sampleRate: Double) {
-        let w0 = 2 * Double.pi * cutoff / sampleRate
-        let alpha = sin(w0) / 2.0.squareRoot()   // sin(w0) / (2 Q) with Q = 1/√2
-        let cosine = cos(w0)
-        let a0 = 1 + alpha
-        b0 = (1 + cosine) / 2 / a0
-        b1 = -(1 + cosine) / a0
-        b2 = (1 + cosine) / 2 / a0
-        a1 = -2 * cosine / a0
-        a2 = (1 - alpha) / a0
-    }
-
-    mutating func apply(_ samples: UnsafeMutablePointer<Float>, count: Int) {
-        for i in 0..<count {
-            let x = Double(samples[i])
-            let y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
-            x2 = x1
-            x1 = x
-            y2 = y1
-            y1 = y
-            samples[i] = Float(y)
-        }
     }
 }

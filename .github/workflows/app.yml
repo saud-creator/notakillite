@@ -61,9 +61,10 @@ jobs:
           xcrun simctl list runtimes | grep -i ios
           echo "OUT=$GITHUB_WORKSPACE/build/out" >> "$GITHUB_ENV"
 
-      - name: Cache the noise models
+      # Caches are restored here and saved at the end even when a test fails, so the next run is faster.
+      - name: Restore the noise models
         id: noise-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: |
             Packages/NoiseModels/DeepFilter.xcframework
@@ -74,6 +75,7 @@ jobs:
           key: noise-models-${{ matrix.runner }}-${{ hashFiles('scripts/build-noise-models.sh', 'scripts/deepfilter/Cargo.lock') }}
 
       - name: Build the noise models (RNNoise, DeepFilterNet 3)
+        id: noise-build
         if: steps.noise-cache.outputs.cache-hit != 'true'
         run: |
           if ! command -v rustup >/dev/null; then
@@ -91,14 +93,16 @@ jobs:
           brew install xcodegen
           xcodegen generate
 
-      - name: Cache Swift packages
-        uses: actions/cache@v4
+      - name: Restore Swift packages
+        id: spm-cache
+        uses: actions/cache/restore@v4
         with:
           path: build/spm
           key: spm-${{ matrix.runner }}-${{ hashFiles('project.yml') }}
 
-      - name: Cache the Whisper test model
-        uses: actions/cache@v4
+      - name: Restore the Whisper test model
+        id: whisper-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/mentality-models
           key: whisper-base-v1
@@ -116,7 +120,8 @@ jobs:
           xcrun simctl list devices | grep "$SIM"
 
       - name: Spoken test lectures
-        run: bash ci/make-speech.sh "$RUNNER_TEMP/speech" | grep -E '^[A-Z_]+=' | tee -a "$GITHUB_ENV"
+        # KEY=path lines for the tests (the keys contain digits: TEST_RUNNER_MENTALITY_E2E_EN).
+        run: bash ci/make-speech.sh "$RUNNER_TEMP/speech" | grep -E '^[A-Z0-9_]+=' | tee -a "$GITHUB_ENV"
 
       - name: Build the app and the tests
         id: build
@@ -173,6 +178,35 @@ jobs:
           if [ -d "$APP" ] && [ -n "${SIM:-}" ]; then
             bash ci/screenshot.sh "$SIM" "$APP" "$OUT/screenshots/${{ matrix.id }}-8-dark.png" dark
           fi
+
+      - name: Save the noise models
+        if: always() && steps.noise-build.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            Packages/NoiseModels/DeepFilter.xcframework
+            Packages/NoiseModels/Sources/CRNNoise
+            Packages/NoiseModels/Sources/NoiseModels/Resources
+            Packages/NoiseModels/TestAssets
+            Packages/NoiseModels/.built-v3
+          key: ${{ steps.noise-cache.outputs.cache-primary-key }}
+
+      - name: Save Swift packages
+        if: always() && steps.spm-cache.outputs.cache-hit != 'true' && steps.build.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: build/spm
+          key: ${{ steps.spm-cache.outputs.cache-primary-key }}
+
+      - name: Save the Whisper test model
+        if: always() && steps.whisper-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ~/mentality-models
+          key: ${{ steps.whisper-cache.outputs.cache-primary-key }}
 
       - name: Upload screenshots, transcripts and test logs
         if: always()

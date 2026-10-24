@@ -118,6 +118,32 @@ final class ImportAndAudioTests: XCTestCase {
         }
     }
 
+    /// A lecturer who pauses a lot (2 s of speech, then 8 s of silence) in a noisy room. DeepFilterNet
+    /// removes the noise between sentences very well, and that must not look like "the voice was
+    /// removed": the louder half of this recording falls by about 20 dB, its loudest tenth by about 2 dB.
+    func testNoiseRemovalIsKeptWhenTheLecturerPausesALot() async throws {
+        guard let assets = ProcessInfo.processInfo.environment["MENTALITY_NOISE_ASSETS"], !assets.isEmpty else {
+            throw XCTSkip("Set MENTALITY_NOISE_ASSETS (the CI workflow does) to test the noise models on real speech.")
+        }
+        let voice = try NoiseModelTests.read48k(URL(fileURLWithPath: assets).appendingPathComponent("clean_freesound_33711.wav"))
+        var clean = [Float](repeating: 0, count: 48_000)
+        var start = 0
+        while clean.count < 48_000 * 60 {
+            if start + 96_000 > voice.count { start = 0 }
+            clean += voice[start..<(start + 96_000)]
+            clean += [Float](repeating: 0, count: 384_000)
+            start += 81_600
+        }
+        let noisy = TestAudio.mix(clean, TestAudio.roomNoise(count: clean.count, rate: 48_000), snr: 8)
+        let folder = TestAudio.folder()
+        let input = folder.appendingPathComponent("pauses-a-lot.wav")
+        try TestAudio.write(noisy, rate: 48_000, to: input)
+        let audio = try await AudioPreparer.prepare(input: input, mode: .deepFilter, keepCleanedAudio: false, folder: folder.appendingPathComponent("work")) { _ in }
+        XCTAssertTrue(audio.cleanupLabel.hasPrefix(CleanupMode.deepFilter.shortLabel), "the cleaned audio was kept: \(audio.cleanupLabel)")
+        XCTAssertTrue(audio.cleanupLabel.contains("dB lower"), audio.cleanupLabel)
+        XCTAssertNotEqual(audio.speech, audio.original)
+    }
+
     func testLibraryIsSavedAndInterruptedLecturesResume() throws {
         let url = TestAudio.folder().appendingPathComponent("library.json")
         let course = Course(title: "C", folderName: "c")
