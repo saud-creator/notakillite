@@ -37,8 +37,11 @@ for TARGET in "${TARGETS[@]}"; do
     --target "$TARGET" --crate-type staticlib -- --print native-static-libs
   LIB="$WORK/src/target/$TARGET/release/libdf.a"
   ls -lh "$LIB"
+  # (Read nm's output first: `nm | grep -q` fails under pipefail when grep exits early.)
+  EXPORTS=$(nm -gU "$LIB" 2>/dev/null | grep -E " T _df_" || true)
+  echo "$EXPORTS"
   for SYMBOL in df_create df_get_frame_length df_process_frame df_set_atten_lim df_free; do
-    nm -gU "$LIB" 2>/dev/null | grep -q " T _$SYMBOL\$" || { echo "$SYMBOL missing from $LIB"; exit 1; }
+    grep -q " _$SYMBOL\$" <<<"$EXPORTS" || { echo "$SYMBOL missing from $LIB"; exit 1; }
   done
   LIBRARIES+=(-library "$LIB")
 done
