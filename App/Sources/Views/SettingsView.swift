@@ -23,7 +23,7 @@ struct SettingsView: View {
     private var selectedCleanup: CleanupMode { CleanupMode(rawValue: cleanup) ?? .deepFilter }
 
     private var selectedModel: WhisperModel {
-        guard let stored = WhisperModel(rawValue: model), stored == .base || WhisperModel.offered.contains(stored) else { return WhisperModel.recommended }
+        guard let stored = WhisperModel(rawValue: model), stored.isTestModel || WhisperModel.offered.contains(stored) else { return WhisperModel.recommended }
         return stored
     }
 

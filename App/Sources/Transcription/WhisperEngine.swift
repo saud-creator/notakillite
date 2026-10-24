@@ -10,8 +10,12 @@ enum WhisperModel: String, CaseIterable, Identifiable, Codable, Sendable {
     case largeV3Compact = "openai_whisper-large-v3_947MB"
     case small = "openai_whisper-small"
     case base = "openai_whisper-base"     // used by the automated tests
+    case tiny = "openai_whisper-tiny"     // used by the automated tests on the iPadOS 18 simulator
 
     var id: String { rawValue }
+
+    /// The small models the automated tests use. Never offered in Settings, but a saved one is kept.
+    var isTestModel: Bool { self == .base || self == .tiny }
 
     /// The models a device can run, recommended first. Devices with enough memory, such as iPad Pro
     /// (M4), get both full-size large models; the iPhone 15 Pro gets the compressed versions of the
@@ -42,6 +46,7 @@ enum WhisperModel: String, CaseIterable, Identifiable, Codable, Sendable {
         case .largeV3Compact: "large-v3 · compressed, 947 MB"
         case .small: "small · light"
         case .base: "base · tests"
+        case .tiny: "tiny · tests"
         }
     }
 
@@ -52,7 +57,8 @@ enum WhisperModel: String, CaseIterable, Identifiable, Codable, Sendable {
         case .turboCompact: "The turbo model compressed to fit this device's memory. Fast and accurate. Recommended."
         case .largeV3Compact: "Full large-v3 compressed to fit this device's memory: the most accurate choice here, but slower than turbo."
         case .small: "About 480 MB. Fast, but noticeably weaker on Arabic."
-        case .base: "Tiny model used by the automated tests."
+        case .base: "Small model used by the automated tests."
+        case .tiny: "The smallest model, used by the automated tests on the iPadOS 18 simulator."
         }
     }
 
@@ -64,6 +70,7 @@ enum WhisperModel: String, CaseIterable, Identifiable, Codable, Sendable {
         case .largeV3Compact: "large-v3 (compressed)"
         case .small: "small"
         case .base: "base"
+        case .tiny: "tiny"
         }
     }
 }

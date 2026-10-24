@@ -45,8 +45,8 @@ struct AppSettings: Sendable {
         s.service = defaults.string(forKey: Key.service).flatMap(SpeechService.init(rawValue:)) ?? s.service
         if let stored = defaults.string(forKey: Key.model).flatMap(WhisperModel.init(rawValue:)) {
             // A model this device can't run (for example a setting restored from an iPad onto an iPhone)
-            // falls back to the recommended one. The tiny test model is always allowed.
-            s.model = stored == .base || WhisperModel.offered.contains(stored) ? stored : WhisperModel.recommended
+            // falls back to the recommended one. The test models are always allowed.
+            s.model = stored.isTestModel || WhisperModel.offered.contains(stored) ? stored : WhisperModel.recommended
         }
         s.cloudModel = cloudModel(for: s.service, defaults: defaults)
         s.customBaseURL = (defaults.string(forKey: Key.customBaseURL) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

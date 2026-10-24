@@ -121,7 +121,7 @@ Each job runs:
 - **Cloud engines**: every service against a local mock server: request format, Arabic/English handling, retries on busy servers and dropped connections, rejected keys and empty accounts stopping the queue, order kept with parallel requests. Real requests run too when the repository has `OPENAI_API_KEY`, `GROQ_API_KEY` or `ELEVENLABS_API_KEY` secrets.
 - **Model choice**: iPad Pro (M4) gets both full-size large models; iPhone 15 Pro gets the compressed ones.
 - **Import**: Notability `.note` exports (recordings in Notability's saved order), folders, files without extensions.
-- **Real speech, end to end**: English and Arabic lectures made with text-to-speech go through DeepFilterNet, silence detection, real WhisperKit (the small "base" model, on the simulator's CPU) and the Markdown writer.
+- **Real speech, end to end**: English and Arabic lectures made with text-to-speech go through DeepFilterNet, silence detection, real WhisperKit (a small test model on the simulator's CPU: "base", or "tiny" on the iPadOS 18 simulator, which computes base wrongly) and the Markdown writer.
 - **The app itself**: the screens and Settings (model menu, cloud option, noise cleanup), then the background test above, with screenshots.
 
 Each run's page shows a summary with the background test's numbers and the transcripts. Screenshots, transcripts and logs are attached as artifacts.

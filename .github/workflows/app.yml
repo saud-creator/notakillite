@@ -38,6 +38,9 @@ jobs:
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
             full_models: "1"
+            # The iPadOS 18 simulator computes the base model's audio encoder wrongly (on every runner,
+            # see whisper-check.yml) but tiny correctly, so this job checks transcripts with tiny.
+            test_model: openai_whisper-tiny
           - id: iphone-15-pro-ios27
             title: iPhone 15 Pro · iOS 27
             runner: xcode-27
@@ -46,6 +49,7 @@ jobs:
             prefer: iPhone 15 Pro
             create: com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro
             full_models: "0"
+            test_model: openai_whisper-base
     steps:
       - uses: actions/checkout@v4
 
@@ -105,7 +109,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ~/mentality-models
-          key: whisper-base-v1
+          key: whisper-${{ matrix.test_model }}-v1
 
       - name: Sound output for the background test
         run: bash ci/ensure-audio-output.sh
@@ -140,6 +144,7 @@ jobs:
           TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
           TEST_RUNNER_MENTALITY_NOISE_ASSETS: ${{ github.workspace }}/Packages/NoiseModels/TestAssets
           TEST_RUNNER_MENTALITY_DEVICE_LABEL: ${{ matrix.id }}
+          TEST_RUNNER_MENTALITY_MODEL: ${{ matrix.test_model }}
           TEST_RUNNER_MENTALITY_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
           TEST_RUNNER_MENTALITY_GROQ_KEY: ${{ secrets.GROQ_API_KEY }}
           TEST_RUNNER_MENTALITY_ELEVENLABS_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
@@ -157,6 +162,7 @@ jobs:
           TEST_RUNNER_MENTALITY_UI_OUT: ${{ github.workspace }}/build/out
           TEST_RUNNER_MENTALITY_DEVICE_LABEL: ${{ matrix.id }}
           TEST_RUNNER_MENTALITY_EXPECT_FULL_MODELS: ${{ matrix.full_models }}
+          TEST_RUNNER_MENTALITY_MODEL: ${{ matrix.test_model }}
           TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
         run: |
           set -o pipefail
