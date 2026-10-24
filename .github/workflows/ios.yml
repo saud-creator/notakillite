@@ -13,13 +13,42 @@ permissions:
   contents: read
 
 jobs:
+  deepfilter:
+    name: DeepFilterNet3 for iOS · Rust libDF xcframework (cached)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore cached xcframework
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ios/DeepFilter/DeepFilter.xcframework
+          key: deepfilter-v0.5.6-${{ hashFiles('ios/ci/build-deepfilter.sh') }}
+
+      - name: Cross-compile libDF for iPhone/iPad and the simulator
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: bash ios/ci/build-deepfilter.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deepfilter-xcframework
+          path: ios/DeepFilter/DeepFilter.xcframework
+          retention-days: 7
+
   latest:
     name: iOS 27 SDK · iPhone + iPad tests, screenshots, IPA
+    needs: deepfilter
     runs-on: xcode-27
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: deepfilter-xcframework
+          path: ios/DeepFilter/DeepFilter.xcframework
 
       - name: Generate Xcode project
         run: |
@@ -83,9 +112,15 @@ jobs:
 
   ipados18:
     name: iPadOS 18 compatibility · iPad tests and screenshot
+    needs: deepfilter
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: deepfilter-xcframework
+          path: ios/DeepFilter/DeepFilter.xcframework
 
       - name: Generate Xcode project
         run: |
