@@ -1,10 +1,11 @@
 name: Whisper check
 
 # Why does Whisper write (almost) no text on the iPadOS 18 simulator when the same test passes on the
-# iOS 27 iPhone simulator? The same speech goes through Whisper built with Xcode 16 and Xcode 26, on
-# iOS 18.6 and iOS 26 simulators of the same macOS 15 runner, and on the iPhone as the working
-# reference. Each job prints "DIAG" lines (model input and output statistics, language, tokens, text)
-# to compare. Runs when this check changes, or by hand.
+# iOS 27 iPhone simulator? First run: on the macOS 15 runner it fails with Xcode 16 and 26 and on
+# iOS 18.6 and 26.2 simulators alike, so the runner is the suspect. This run tries the iPadOS 18
+# simulator on the macOS 26 runner, an iPad simulator on the runner the iPhone uses, and repeats the
+# macOS 15 and iPhone runs with the "DIAG" lines (model input and output statistics, language,
+# tokens, text). Runs when this check changes, or by hand.
 
 on:
   push:
@@ -27,25 +28,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - title: Xcode 16 · iPad · iOS 18
+          - title: macOS 26 runner · Xcode 26 · iPad · iOS 18
+            runner: macos-26
+            xcode: "26"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: macOS 26 runner · Xcode 16 · iPad · iOS 18
+            runner: macos-26
+            xcode: "16"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: macOS 15 runner · Xcode 16 · iPad · iOS 18
             runner: macos-15
             xcode: "16"
             os: "18"
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
-          - title: Xcode 26 · iPad · iOS 18
-            runner: macos-15
-            xcode: "26"
-            os: "18"
+          - title: Xcode 27 runner · iPad · iOS 27
+            runner: xcode-27
+            xcode: ""
+            os: "27"
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
-          - title: Xcode 26 · iPad · iOS 26
-            runner: macos-15
-            xcode: "26"
-            os: "26"
-            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
-            create: iPad Pro 13-inch (M4)
-          - title: Xcode 27 · iPhone 15 Pro · iOS 27 (reference)
+          - title: Xcode 27 runner · iPhone 15 Pro · iOS 27 (reference)
             runner: xcode-27
             xcode: ""
             os: "27"
@@ -61,8 +68,9 @@ jobs:
             if [ -z "$XCODE" ]; then echo "::error::No Xcode ${{ matrix.xcode }} on this runner"; ls -d /Applications/Xcode*.app; exit 1; fi
             sudo xcode-select -s "$XCODE"
           fi
+          ls -d /Applications/Xcode*.app
           xcodebuild -version
-          sw_vers -productVersion
+          echo "macOS $(sw_vers -productVersion), $(sysctl -n machdep.cpu.brand_string)"
           xcrun simctl list runtimes | grep -i ios
 
       - name: Restore the noise models
@@ -135,6 +143,6 @@ jobs:
           xcodebuild test-without-building -project Mentality.xcodeproj -scheme Mentality \
             -destination "id=$SIM" -derivedDataPath build/dd -clonedSourcePackagesDirPath build/spm \
             -only-testing:MentalityTests/WhisperDiagnosticTests -only-testing:MentalityTests/WhisperEndToEndTests \
-            -only-testing:MentalityTests/WhisperCPUPauseTests -parallel-testing-enabled NO \
+            -only-testing:MentalityTests/WhisperCPUPauseTests -only-testing:MentalityTests/ModelStorageTests -parallel-testing-enabled NO \
             | tee build/whisper.log | grep -iE "^DIAG|error:|Test case '.*' (passed|failed|skipped)|Executed|\*\* TEST" || true
           grep -qE "\*\* TEST (EXECUTE )?SUCCEEDED \*\*" build/whisper.log

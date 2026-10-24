@@ -134,16 +134,19 @@ actor WhisperEngine: SpeechEngine {
         }
     }
 
-    private static let readyMarker = ".mentality-ready"
+    static let readyMarker = ".mentality-ready"
 
-    /// The model's folder when it was fully downloaded and loaded once before.
-    static func localFolder(_ model: WhisperModel) -> URL? {
+    /// The model's folder when it was fully downloaded and loaded once before. Hidden folders are skipped:
+    /// the downloader keeps its bookkeeping in `.cache/huggingface/download/<model name>/`, a folder
+    /// with the same name as the model's.
+    static func localFolder(_ model: WhisperModel, in base: URL = modelsFolder) -> URL? {
         let fm = FileManager.default
-        guard let enumerator = fm.enumerator(at: modelsFolder, includingPropertiesForKeys: [.isDirectoryKey], options: [.skipsPackageDescendants]) else { return nil }
+        guard let enumerator = fm.enumerator(at: base, includingPropertiesForKeys: [.isDirectoryKey],
+                                             options: [.skipsPackageDescendants, .skipsHiddenFiles]) else { return nil }
         for case let url as URL in enumerator {
             if url.pathExtension == "mlmodelc" { enumerator.skipDescendants(); continue }
-            if url.lastPathComponent == model.rawValue {
-                return fm.fileExists(atPath: url.appendingPathComponent(readyMarker).path) ? url : nil
+            if url.lastPathComponent == model.rawValue, fm.fileExists(atPath: url.appendingPathComponent(readyMarker).path) {
+                return url
             }
         }
         return nil
