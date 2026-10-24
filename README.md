@@ -9,8 +9,8 @@ Import → remove noise → skip silence → transcribe Arabic, English or mixed
 | --- | --- |
 | Import | Notability → open a note → **Share** → **Note** format → **Open in Mentality**. Or **Import lectures…** from Files (`.note`, `.zip`, audio, whole folders, many at once), **paste**, or **drag** files onto the window. |
 | Noise | **Apple Voice Isolation** (on-device machine learning, removes air conditioning, fans and chatter) plus a rumble/hum filter. If cleanup ever removes too much of the voice, the original audio is used automatically. |
-| Silence | Pauses are found with a threshold that adapts to each recording, and only speech is sent to Whisper (it invents text on silence). |
-| Speech-to-text | **Whisper large-v3** or **large-v3 turbo** through [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift), on the Neural Engine. Free, private, offline after a one-time download. Language **Auto** detects Arabic or English every 30 seconds, for lectures that switch. |
+| Silence | Long, clearly silent stretches (3 s or more near the noise floor) are skipped, using a threshold that adapts to each recording. Everything else, including quiet speech, goes to Whisper in pieces of about 10 to 28 seconds. |
+| Speech-to-text | **Whisper large-v3** or **large-v3 turbo** through [WhisperKit](https://github.com/argmaxinc/argmax-oss-swift), on the Neural Engine. Free, private, offline after a one-time download. Language **Auto** decides between Arabic and English for every piece of up to 28 seconds (only those two compete, so Arabic is never mistaken for Persian or Urdu), for lectures that switch. |
 | Quality check | Every lecture is audited for Whisper failures (one sentence repeated, invented text, text over silence, missing speech). Failing 5-minute parts are re-transcribed automatically (original audio, shorter pieces, fixed language, sampling). Anything that still fails is marked **⚠** in the file and the lecture shows **Needs review**: nothing is guessed. |
 | Output | `Files → On My iPad → Mentality → Lectures → <date> - <name>/`: `01 - Lecture.md`, the cleaned audio, and `00 - Index.md`. **Copy text**, **Share**, or **Share all transcripts**. |
 
@@ -53,7 +53,7 @@ The instructions are editable in Settings, and you can switch to plain `.txt` or
 
 ## Using the M4
 
-- One lecture is transcribed at a time on the Neural Engine, with **several pieces in parallel** (Settings → Performance, 4 by default; up to 8).
+- One lecture is transcribed at a time on the Neural Engine, with **several pieces in parallel** (Settings → Performance, 4 by default, which WhisperKit finds fastest on iPad).
 - While one lecture is being transcribed, the **next lecture's audio is cleaned at the same time** on the CPU.
 - Model choice: **large-v3 turbo** (default, ~1.6 GB) is close to large-v3 accuracy and several times faster. **large-v3** (~3 GB) is the most accurate for Arabic; its first start takes several minutes while iPadOS prepares it for the Neural Engine. Download models on Wi-Fi with the app open (Settings → Download now).
 
@@ -83,7 +83,7 @@ Every push runs the [iPad app workflow](.github/workflows/ipad.yml) on a GitHub 
 - **Pipeline**: a scripted engine proves that loops are repaired from the original audio, that unfixable parts become ⚠ markers, and that an interrupted lecture resumes from its checkpoint.
 - **Import**: Notability `.note` exports (recordings in Notability's saved order), folders, files without extensions.
 - **Audio**: decoding, cleanup and 16 kHz conversion for every cleanup mode.
-- **Real speech, end to end**: English and Arabic lectures spoken by macOS text-to-speech go through cleanup, silence detection, real WhisperKit (small "base" model on the simulator CPU) and the Markdown writer. The produced transcripts are printed in the workflow log.
+- **Real speech, end to end**: English and Arabic lectures made with text-to-speech (macOS voices; Google TTS for Arabic when the runner has no Arabic voice) go through cleanup, silence detection, real WhisperKit (small "base" model on the simulator CPU) and the Markdown writer. The produced transcripts are printed in the workflow log.
 - Screenshots in light and dark mode, and the unsigned `.ipa`.
 
 The simulator has no Neural Engine, and Voice Isolation may be missing there, so the tests never depend on them. **Final acceptance is a real 40-minute Arabic/English lecture on your iPad.**

@@ -82,11 +82,11 @@ struct SettingsView: View {
                 }
 
                 Section {
-                    Stepper("Pieces transcribed in parallel: \(workers)", value: $workers, in: 1...8)
+                    Stepper("Pieces transcribed in parallel: \(min(workers, 4))", value: $workers, in: 1...4)
                     Toggle("Keep the screen on while working", isOn: $keepAwake)
                     Toggle("Notify me when lectures are ready", isOn: $notify)
                 } header: { Text("Performance") } footer: {
-                    Text("4 is a good balance on iPad Pro M4; higher can be faster with large-v3 turbo but uses more memory and heat. Changes apply to the next run.")
+                    Text("4 is the fastest on iPad Pro M4 (WhisperKit gets slower with more on iPad). Lower it if the iPad gets hot. Changes apply to the next run.")
                 }
 
                 Section("Working in the background on iPadOS 18") {

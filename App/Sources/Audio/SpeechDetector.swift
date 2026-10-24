@@ -15,6 +15,9 @@ enum SpeechDetector {
         var silences: [TimeRange]
         var threshold: Double
         var speech: [TimeRange]
+        /// Everything except long, clearly silent stretches: what is sent to Whisper. Broader than
+        /// `speech`, so a quiet lecturer close to the noise floor is never dropped.
+        var keep: [TimeRange]
         var speechSeconds: Double { speech.reduce(0) { $0 + $1.length } }
     }
 
@@ -22,7 +25,9 @@ enum SpeechDetector {
     static func analyze(_ url: URL) throws -> Analysis {
         let (levels, duration) = try self.levels(of: url)
         let (silences, threshold) = self.silences(levels)
-        return Analysis(levels: levels, duration: duration, silences: silences, threshold: threshold, speech: speech(from: silences, duration: duration))
+        let (clearlySilent, _) = self.silences(levels, minSeconds: 3, margin: 3)
+        return Analysis(levels: levels, duration: duration, silences: silences, threshold: threshold,
+                        speech: speech(from: silences, duration: duration), keep: speech(from: clearlySilent, duration: duration))
     }
 
     static func level(_ samples: UnsafeBufferPointer<Float>) -> Double {
@@ -113,12 +118,15 @@ enum SpeechDetector {
         return Array(cuts.dropFirst())
     }
 
-    /// Plans the audio pieces sent to Whisper: speech only (pauses longer than `maxGap` are skipped,
-    /// which removes silence), each at most `maxSeconds` long, split at the quietest moment when a
-    /// stretch of speech runs longer. Pieces are transcribed independently, so a mistake in one can
-    /// never carry over into the next.
-    static func chunks(speech: [TimeRange], levels: [Double], duration: Double, maxSeconds: Double = 28,
-                       maxGap: Double = 1.5, padding: Double = 0.25, minSeconds: Double = 0.6) -> [TimeRange] {
+    /// Plans the audio pieces sent to Whisper from `keep` (audio that isn't clearly silent).
+    ///
+    /// Neighbouring stretches are merged across pauses of up to `shortGap`, and across pauses of up to
+    /// `maxGap` when either side is shorter than `targetSeconds`: very short clips make Whisper invent
+    /// text ("Thank you."). Longer stretches are split at their quietest moment so no piece is longer
+    /// than `maxSeconds`. Pieces are transcribed independently, so a mistake in one never carries over.
+    static func chunks(speech keep: [TimeRange], levels: [Double], duration: Double, maxSeconds: Double = 28,
+                       targetSeconds: Double = 10, shortGap: Double = 1.5, maxGap: Double = 5,
+                       padding: Double = 0.25, minSeconds: Double = 0.6) -> [TimeRange] {
         var chunks: [TimeRange] = []
         var current: TimeRange?
         func flush() {
@@ -126,9 +134,10 @@ enum SpeechDetector {
             for part in split(c, levels: levels, maxSeconds: maxSeconds) where part.length >= minSeconds { chunks.append(part) }
             current = nil
         }
-        for interval in speech {
+        for interval in keep {
             let padded = TimeRange(start: max(0, interval.start - padding), end: min(duration, interval.end + padding))
-            if var c = current, padded.start - c.end <= maxGap, padded.end - c.start <= maxSeconds {
+            if var c = current, padded.end - c.start <= maxSeconds,
+               padded.start - c.end <= shortGap || ((c.length < targetSeconds || padded.length < targetSeconds) && padded.start - c.end <= maxGap) {
                 c.end = max(c.end, padded.end)
                 current = c
             } else {
@@ -144,16 +153,17 @@ enum SpeechDetector {
         return chunks.filter { $0.length >= minSeconds }
     }
 
-    /// Splits a range longer than `maxSeconds` at the quietest 100 ms within its last 8 seconds.
+    /// Splits a range longer than `maxSeconds` at its quietest 100 ms between 40 % and 100 % of
+    /// `maxSeconds` (the latest one when several are equally quiet).
     static func split(_ range: TimeRange, levels: [Double], maxSeconds: Double) -> [TimeRange] {
         var parts: [TimeRange] = []
         var cursor = range.start
         while range.end - cursor > maxSeconds {
-            let searchFrom = cursor + maxSeconds - 8, searchTo = cursor + maxSeconds
+            let searchFrom = cursor + maxSeconds * 0.4, searchTo = cursor + maxSeconds
             var best = searchTo, quietest = Double.greatestFiniteMagnitude
             var i = Int((searchFrom / windowSeconds).rounded(.up))
-            while Double(i) * windowSeconds < searchTo, i < levels.count {
-                if i >= 0, levels[i] < quietest { quietest = levels[i]; best = (Double(i) + 0.5) * windowSeconds }
+            while (Double(i) + 1) * windowSeconds <= searchTo + 1e-9, i < levels.count {
+                if i >= 0, levels[i] <= quietest { quietest = levels[i]; best = (Double(i) + 0.5) * windowSeconds }
                 i += 1
             }
             best = min(max(best, cursor + 1), searchTo)

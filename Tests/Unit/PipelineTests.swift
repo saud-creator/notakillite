@@ -76,6 +76,26 @@ final class PipelineTests: XCTestCase {
         XCTAssertEqual(result.quality.status, .ok)
     }
 
+    func testCheckpointFromOtherSettingsIsNotReused() async throws {
+        let prepared = try audio(cleanedLoops: false, originalLoops: false)
+        let checkpoint = TestAudio.folder().appendingPathComponent("checkpoint.json")
+        var options = TranscriptionPipeline.Options()
+        options.checkpointKey = "large-v3|auto"
+        _ = try await TranscriptionPipeline(engine: FakeEngine(), options: options).run(audio: prepared, checkpoint: checkpoint) { _, _ in }
+        options.checkpointKey = "turbo|ar"
+        let engine = FakeEngine()
+        _ = try await TranscriptionPipeline(engine: engine, options: options).run(audio: prepared, checkpoint: checkpoint) { _, _ in }
+        let saved = try JSONDecoder().decode(TranscriptionPipeline.Checkpoint.self, from: Data(contentsOf: checkpoint))
+        XCTAssertEqual(engine.piecesSeen, saved.chunks.count, "a different model or language transcribes everything again")
+    }
+
+    func testAutoLanguageOnlyChoosesArabicOrEnglish() {
+        XCTAssertEqual(WhisperEngine.arabicOrEnglish(["ar": -0.4, "en": -1.2, "fa": -0.1], detected: "fa"), "ar")
+        XCTAssertEqual(WhisperEngine.arabicOrEnglish(["ar": -2.0, "en": -0.3], detected: "en"), "en")
+        XCTAssertEqual(WhisperEngine.arabicOrEnglish(["ur": -0.2], detected: "ur"), "ar", "Persian/Urdu guesses count as Arabic")
+        XCTAssertEqual(WhisperEngine.arabicOrEnglish([:], detected: "en"), "en")
+    }
+
     func testPlacingSegmentsUsesLectureTimeAndDropsArtifacts() {
         var artifacts = 0
         let placed = TranscriptionPipeline.place([

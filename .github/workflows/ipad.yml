@@ -42,6 +42,12 @@ jobs:
           path: build/spm
           key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
 
+      - name: Cache the test speech model
+        uses: actions/cache@v4
+        with:
+          path: ~/mentality-models
+          key: whisper-base-v1
+
       - name: Pick iPad simulator
         run: |
           echo "IPAD=$(python3 ci/pick-simulator.py 18)" >> "$GITHUB_ENV"
@@ -52,6 +58,7 @@ jobs:
       - name: Unit and end-to-end tests on iPad simulator
         env:
           TEST_RUNNER_MENTALITY_E2E_OUT: ${{ runner.temp }}/transcripts
+          TEST_RUNNER_MENTALITY_MODELS_DIR: /Users/runner/mentality-models
         run: |
           set -o pipefail
           xcodebuild test -project Mentality.xcodeproj -scheme Mentality -derivedDataPath build/dd \

@@ -5,7 +5,7 @@ enum LectureLanguage: String, CaseIterable, Identifiable, Codable, Sendable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .auto: "Auto · Arabic and English, detected every 30 seconds"
+        case .auto: "Auto · Arabic or English, decided for every piece"
         case .ar: "Arabic"
         case .en: "English"
         }
@@ -46,7 +46,7 @@ struct AppSettings: Sendable {
         if defaults.object(forKey: Key.keepAwake) != nil { s.keepAwake = defaults.bool(forKey: Key.keepAwake) }
         if defaults.object(forKey: Key.notify) != nil { s.notify = defaults.bool(forKey: Key.notify) }
         let workers = defaults.integer(forKey: Key.workers)
-        if workers > 0 { s.workers = min(8, workers) }
+        if workers > 0 { s.workers = min(4, workers) }   // WhisperKit is slower with more than 4 on iPad
         return s
     }
 }

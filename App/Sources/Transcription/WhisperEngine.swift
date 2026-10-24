@@ -64,7 +64,9 @@ actor WhisperEngine: SpeechEngine {
     private var workers = 4
 
     static var modelsFolder: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Models", isDirectory: true)
+        // Tests can point this at a cached folder (MENTALITY_MODELS_DIR) so CI downloads models once.
+        let override = ProcessInfo.processInfo.environment["MENTALITY_MODELS_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+        let base = override ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Models", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
@@ -77,7 +79,7 @@ actor WhisperEngine: SpeechEngine {
 
     /// Downloads (once) and loads a model. `stage` receives text and 0–1 progress.
     func load(_ model: WhisperModel, workers: Int, stage: @escaping @Sendable (String, Double) -> Void) async throws {
-        self.workers = max(1, workers)
+        self.workers = min(4, max(1, workers))
         if loaded == model, pipe != nil { return }
         pipe = nil
         loaded = nil
@@ -131,17 +133,49 @@ actor WhisperEngine: SpeechEngine {
         loaded = nil
     }
 
+    /// Lectures here are Arabic, English, or both. Whisper's own detection chooses among ~100 languages
+    /// and often turns Arabic into Persian/Urdu or translates it, so only Arabic and English compete.
+    static func arabicOrEnglish(_ probabilities: [String: Float], detected: String?) -> String {
+        if let ar = probabilities["ar"], let en = probabilities["en"] { return ar >= en ? "ar" : "en" }
+        if probabilities["ar"] != nil { return "ar" }
+        if probabilities["en"] != nil { return "en" }
+        return detected == "en" ? "en" : "ar"
+    }
+
     func transcribe(_ pieces: [[Float]], settings: DecodeSettings) async throws -> [PieceResult] {
         guard let pipe else { throw WhisperEngineError.modelUnavailable("not loaded") }
         guard !pieces.isEmpty else { return [] }
+
+        // Language per piece: fixed, or the likelier of Arabic and English.
+        var languages: [String] = []
+        if let fixed = settings.language {
+            languages = Array(repeating: fixed, count: pieces.count)
+        } else {
+            for piece in pieces {
+                try Task.checkCancellation()
+                let detection = try? await pipe.detectLangauge(audioArray: piece)   // (sic) WhisperKit's spelling
+                languages.append(Self.arabicOrEnglish(detection?.langProbs ?? [:], detected: detection?.language))
+            }
+        }
+
+        var results = [PieceResult?](repeating: nil, count: pieces.count)
+        for language in Set(languages).sorted() {
+            let indices = languages.indices.filter { languages[$0] == language }
+            let out = try await decode(indices.map { pieces[$0] }, language: language, settings: settings, pipe: pipe)
+            for (n, index) in indices.enumerated() where n < out.count { results[index] = out[n] }
+        }
+        return results.map { $0 ?? PieceResult(segments: [], language: nil) }
+    }
+
+    private func decode(_ pieces: [[Float]], language: String, settings: DecodeSettings, pipe: WhisperKit) async throws -> [PieceResult] {
         var options = DecodingOptions(
             task: .transcribe,
-            language: settings.language,
+            language: language,
             temperature: settings.temperature,
             temperatureIncrementOnFallback: 0.2,
             temperatureFallbackCount: 5,
             usePrefillPrompt: true,
-            detectLanguage: settings.language == nil,
+            detectLanguage: false,
             skipSpecialTokens: true,
             withoutTimestamps: false,
             suppressBlank: true,
@@ -156,7 +190,6 @@ actor WhisperEngine: SpeechEngine {
         if !terms.isEmpty, let tokenizer = pipe.tokenizer {
             // A fixed prompt only: earlier decoded text is never fed back (that caused repetition loops).
             options.promptTokens = Array(tokenizer.encode(text: " " + terms).filter { $0 < tokenizer.specialTokens.specialTokenBegin }.prefix(120))
-            options.usePrefillPrompt = true
         }
         let results = await pipe.transcribeWithResults(audioArrays: pieces, decodeOptions: options)
         var out: [PieceResult] = []
@@ -164,7 +197,7 @@ actor WhisperEngine: SpeechEngine {
             switch result {
             case .success(let list):
                 let segments = list.flatMap(\.segments).map { SpeechSegment(start: Double($0.start), end: Double($0.end), text: $0.text) }
-                out.append(PieceResult(segments: segments, language: list.first?.language))
+                out.append(PieceResult(segments: segments, language: language))
             case .failure(let error):
                 if error is CancellationError { throw error }
                 throw WhisperEngineError.pieceFailed(error.localizedDescription)

@@ -7,7 +7,9 @@ import json, subprocess, sys
 version = sys.argv[1] if len(sys.argv) > 1 else "18"
 devices = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"]))["devices"]
 runtimes = sorted((r for r in devices if ".iOS-" in r), reverse=True)  # newest first
-wanted = [r for r in runtimes if f".iOS-{version.replace('.', '-')}" in r] or runtimes
+wanted = [r for r in runtimes if f".iOS-{version.replace('.', '-')}" in r]
+if not wanted:
+    sys.exit(f"No iOS {version} simulator runtime on this runner (found {runtimes}). Refusing to test on another version.")
 for preference in ("iPad Pro 13-inch (M4)", "iPad Pro 11-inch (M4)", "iPad Pro", "iPad"):
     for runtime in wanted:
         for device in devices[runtime]:

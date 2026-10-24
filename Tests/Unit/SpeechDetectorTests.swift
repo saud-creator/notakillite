@@ -41,6 +41,25 @@ final class SpeechDetectorTests: XCTestCase {
         for (a, b) in zip(chunks, chunks.dropFirst()) { XCTAssertLessThanOrEqual(a.end, b.start + 1e-9) }
     }
 
+    func testQuietSpeechCloseToTheNoiseFloorIsStillTranscribed() throws {
+        // Air-conditioning hiss everywhere, a quiet lecturer only ~6 dB above it from 6 s to 12 s.
+        let url = TestAudio.folder().appendingPathComponent("quiet.wav")
+        try TestAudio.writeSpeechLike(url, pattern: [(0, 6), (6, 6)], amplitude: 0.06, noise: 0.02)
+        let analysis = try SpeechDetector.analyze(url)
+        let kept = analysis.keep.reduce(0) { $0 + $1.overlap(TimeRange(start: 6, end: 12)) }
+        XCTAssertGreaterThan(kept, 5.5, "keep: \(analysis.keep), threshold \(analysis.threshold)")
+        let chunks = SpeechDetector.chunks(speech: analysis.keep, levels: analysis.levels, duration: analysis.duration)
+        XCTAssertTrue(chunks.contains { $0.overlap(TimeRange(start: 6, end: 12)) > 5.5 }, "\(chunks)")
+    }
+
+    func testShortStretchesAreMergedIntoLongerPieces() {
+        // Short phrases separated by 4-second pauses: one piece, not many 1-second clips.
+        let speech = (0..<4).map { TimeRange(start: Double($0) * 5, end: Double($0) * 5 + 1) }
+        let chunks = SpeechDetector.chunks(speech: speech, levels: Array(repeating: -20, count: 300), duration: 30)
+        XCTAssertEqual(chunks.count, 1, "\(chunks)")
+        XCTAssertEqual(chunks[0].length, 16.25, accuracy: 0.01)
+    }
+
     func testLongSpeechIsCutAtTheQuietestMoment() {
         var levels = Array(repeating: -20.0, count: 600)
         levels[250] = -50   // 25.0–25.1 s

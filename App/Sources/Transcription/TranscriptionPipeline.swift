@@ -22,6 +22,8 @@ struct TranscriptionPipeline {
         var maxAttemptsPerPart = 4
         var retryBudgetShare = 1.0       // re-process at most this share of the lecture
         var quality = TranscriptQuality.Config()
+        /// Model, language and vocabulary: a saved checkpoint made with other settings is discarded.
+        var checkpointKey = ""
     }
 
     typealias Stage = @Sendable (String, Double) -> Void
@@ -31,6 +33,7 @@ struct TranscriptionPipeline {
     var device = "iPad"
 
     struct Checkpoint: Codable {
+        var key: String?
         var chunks: [TimeRange]
         var results: [Int: PieceResult]
     }
@@ -39,12 +42,12 @@ struct TranscriptionPipeline {
         stage("Finding speech and pauses", 0)
         let analysis = try SpeechDetector.analyze(audio.speech)
         let duration = max(audio.duration, analysis.duration)
-        let chunks = SpeechDetector.chunks(speech: analysis.speech, levels: analysis.levels, duration: duration)
+        let chunks = SpeechDetector.chunks(speech: analysis.keep, levels: analysis.levels, duration: duration)
         let parts = TranscriptQuality.pieces(duration: duration, cuts: SpeechDetector.cuts(duration: duration, silences: analysis.silences, target: options.partSeconds))
 
         // First pass, resuming from the checkpoint when the plan is unchanged.
         var saved = checkpoint.flatMap { try? JSONDecoder().decode(Checkpoint.self, from: Data(contentsOf: $0)) }
-        if saved?.chunks != chunks { saved = Checkpoint(chunks: chunks, results: [:]) }
+        if saved?.chunks != chunks || saved?.key != options.checkpointKey { saved = Checkpoint(key: options.checkpointKey, chunks: chunks, results: [:]) }
         var results = saved!.results
         let settings = DecodeSettings(language: options.language, temperature: 0, vocabulary: options.vocabulary)
         let todo = chunks.indices.filter { results[$0] == nil }
@@ -58,7 +61,7 @@ struct TranscriptionPipeline {
             let out = try await engine.transcribe(samples, settings: settings)
             for (n, chunkIndex) in batch.enumerated() where n < out.count { results[chunkIndex] = out[n] }
             if let checkpoint {
-                try? JSONEncoder().encode(Checkpoint(chunks: chunks, results: results)).write(to: checkpoint, options: .atomic)
+                try? JSONEncoder().encode(Checkpoint(key: options.checkpointKey, chunks: chunks, results: results)).write(to: checkpoint, options: .atomic)
             }
             index += batch.count
         }
@@ -80,6 +83,7 @@ struct TranscriptionPipeline {
                 try Task.checkCancellation()
                 let piece = part.piece
                 let partSpeech = analysis.speech.filter { $0.end > piece.start && $0.start < piece.end }
+                let partKeep = analysis.keep.filter { $0.end > piece.start && $0.start < piece.end }
                 func check(_ list: [SpeechSegment]) -> TranscriptQuality.Report {
                     TranscriptQuality.audit(list, duration: piece.end, pieces: [piece], speech: partSpeech, config: options.quality)
                 }
@@ -102,7 +106,7 @@ struct TranscriptionPipeline {
                     tries += 1; attempts += 1
                     spent += piece.range.length
                     stage("Checking quality · re-transcribing part \(n + 1) of \(failing.count) (\(strategy.name))", 0.8 + 0.18 * Double(n) / Double(failing.count))
-                    let ranges = SpeechDetector.chunks(speech: partSpeech.map { TimeRange(start: max($0.start, piece.start), end: min($0.end, piece.end)) },
+                    let ranges = SpeechDetector.chunks(speech: partKeep.map { TimeRange(start: max($0.start, piece.start), end: min($0.end, piece.end)) },
                                                        levels: analysis.levels, duration: piece.end, maxSeconds: strategy.maxSeconds)
                         .filter { $0.start >= piece.start }
                     let samples = try ranges.map { try AudioSamples.read(strategy.source, range: $0) }

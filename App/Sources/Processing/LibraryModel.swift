@@ -264,6 +264,7 @@ final class LibraryModel: ObservableObject {
             options.language = settings.language.whisperCode
             options.vocabulary = settings.vocabulary
             options.batchSize = max(4, settings.workers * 2)
+            options.checkpointKey = [settings.model.rawValue, settings.language.rawValue, settings.vocabulary, settings.cleanup.rawValue].joined(separator: "|")
             let pipeline = TranscriptionPipeline(engine: WhisperEngine.shared, options: options, device: UIDevice.current.model)
             let checkpoint = Storage.workFolder(lecture).appendingPathComponent("checkpoint.json")
             let transcript = try await pipeline.run(audio: audio, checkpoint: checkpoint) { [weak self] text, fraction in

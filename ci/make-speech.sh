@@ -12,5 +12,13 @@ say -v "${EN_VOICE:-Samantha}" -o "$OUT/en.aiff" "$EN" && afconvert "$OUT/en.aif
 if [ -n "$AR_VOICE" ] && say -v "$AR_VOICE" -o "$OUT/ar.aiff" "$AR"; then
   afconvert "$OUT/ar.aiff" "$OUT/arabic-lecture.m4a" -d aac -f m4af && echo "TEST_RUNNER_MENTALITY_E2E_AR=$OUT/arabic-lecture.m4a"
 else
-  echo "No Arabic text-to-speech voice on this runner; the Arabic speech test will be skipped." >&2
+  # macOS runners usually lack an Arabic voice: use Google's text-to-speech (gTTS) instead.
+  echo "No Arabic macOS voice; trying gTTS." >&2
+  python3 -m pip install --quiet --user gTTS >&2 || python3 -m pip install --quiet --break-system-packages gTTS >&2
+  AR_PLAIN=$(echo "$AR" | sed -E 's/\[\[slnc [0-9]+\]\]//g')
+  if AR_TEXT="$AR_PLAIN" AR_OUT="$OUT/ar.mp3" python3 -c 'import os; from gtts import gTTS; gTTS(os.environ["AR_TEXT"], lang="ar").save(os.environ["AR_OUT"])' >&2; then
+    afconvert "$OUT/ar.mp3" "$OUT/arabic-lecture.m4a" -d aac -f m4af && echo "TEST_RUNNER_MENTALITY_E2E_AR=$OUT/arabic-lecture.m4a"
+  else
+    echo "::warning::No Arabic speech could be generated; the Arabic end-to-end test will be skipped (not counted as Arabic coverage)." >&2
+  fi
 fi

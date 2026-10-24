@@ -69,6 +69,7 @@ enum AudioPreparer {
         let source: AVAudioFile
         do { source = try AVAudioFile(forReading: input) } catch { throw AudioPreparationError.unreadable(input.lastPathComponent) }
         guard source.length > 0 else { throw AudioPreparationError.unreadable(input.lastPathComponent) }
+        try checkFreeSpace(seconds: Double(source.length) / source.fileFormat.sampleRate, in: folder)
 
         // 1. Decode to 48 kHz mono so every source format reaches the effects the same way.
         let mono48 = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: workRate, channels: 1, interleaved: false)!
@@ -93,19 +94,38 @@ enum AudioPreparer {
                                        speech: speech, cleaned: cleaned) { progress(0.35 + $0 * 0.6) }
 
         // 4. Safety net: if cleanup removed most of the voice, transcribe the original instead.
-        let before = try loudness(original), after = try loudness(speech)
+        let before = try levelSummary(original), after = try levelSummary(speech)
         progress(1)
-        if after < before - 20 || after < -65 {
+        if after.loud < before.loud - 20 || after.loud < -65 {
             try? fm.removeItem(at: speech)
             return PreparedAudio(original: original, speech: original, cleanedM4A: cleaned, duration: duration,
                                  cleanupLabel: "None (cleanup removed too much of the voice, so the original audio was used)")
         }
-        var label = usedIsolation ? CleanupMode.voiceIsolation.shortLabel : CleanupMode.lowCut.shortLabel
-        if mode == .voiceIsolation && !usedIsolation { label += " (Voice Isolation not available on this device)" }
+        // Report honestly what the cleanup did, measured on the background noise between words.
+        let reduction = before.floor - after.floor
+        var label: String
+        if usedIsolation {
+            label = reduction >= 1 ? "Apple Voice Isolation + rumble filter (background noise \(Int(reduction.rounded())) dB lower)"
+                                   : "Rumble filter (Apple Voice Isolation ran but had no measurable effect on this recording)"
+        } else {
+            label = CleanupMode.lowCut.shortLabel
+            if mode == .voiceIsolation { label += " (Voice Isolation is not available on this device)" }
+        }
         return PreparedAudio(original: original, speech: speech, cleanedM4A: cleaned, duration: duration, cleanupLabel: label)
     }
 
+    /// Temporary audio needs about 260 kB per second of recording (≈ 1.4 GB for 90 minutes).
+    static func checkFreeSpace(seconds: Double, in folder: URL) throws {
+        let needed = Int64(seconds * 260_000) + 200_000_000
+        let values = try? folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        if let available = values?.volumeAvailableCapacityForImportantUsage, available > 0, available < needed {
+            let gb = { (bytes: Int64) in String(format: "%.1f GB", Double(bytes) / 1e9) }
+            throw AudioPreparationError.failed("not enough free space on the iPad. This recording needs about \(gb(needed)) while it is processed; \(gb(available)) is free.")
+        }
+    }
+
     /// Plays the decoded audio through a rumble filter (and Voice Isolation) in offline mode.
+    /// Effect latency is compensated, so timestamps and the end of the lecture stay exact.
     private static func render(decoded: URL, isolation: Bool, speech: URL, cleaned: URL?, progress: (Double) -> Void) throws -> Bool {
         let input = try AVAudioFile(forReading: decoded)
         let format = input.processingFormat
@@ -119,11 +139,13 @@ enum AudioPreparer {
         engine.attach(player)
         engine.attach(lowCut)
         engine.connect(player, to: lowCut, format: format)
+        var latency = lowCut.auAudioUnit.latency
         if isolation {
             let effect = AVAudioUnitEffect(audioComponentDescription: voiceIsolationDescription)
             engine.attach(effect)
             engine.connect(lowCut, to: effect, format: format)
             engine.connect(effect, to: engine.mainMixerNode, format: format)
+            latency += effect.auAudioUnit.latency
         } else {
             engine.connect(lowCut, to: engine.mainMixerNode, format: format)
         }
@@ -143,18 +165,28 @@ enum AudioPreparer {
             let aac: [String: Any] = [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: workRate, AVNumberOfChannelsKey: 1, AVEncoderBitRateKey: 64_000]
             cleanedFile = try AVAudioFile(forWriting: cleaned, settings: aac, commonFormat: .pcmFormatFloat32, interleaved: false)
         }
+        let latencyFrames = AVAudioFramePosition(max(0, latency) * format.sampleRate)
+        let end = total + latencyFrames
+        var skip = latencyFrames
         let buffer = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: engine.manualRenderingMaximumFrameCount)!
         var stalls = 0
-        while engine.manualRenderingSampleTime < total {
+        while engine.manualRenderingSampleTime < end {
             try Task.checkCancellation()
-            let remaining = AVAudioFrameCount(total - engine.manualRenderingSampleTime)
+            let remaining = AVAudioFrameCount(end - engine.manualRenderingSampleTime)
             let status = try engine.renderOffline(min(buffer.frameCapacity, remaining), to: buffer)
             switch status {
             case .success:
                 stalls = 0
-                try cleanedFile?.write(from: buffer)
-                try appendConverted(buffer, with: toSpeech, to: speechFile)
-                progress(Double(engine.manualRenderingSampleTime) / Double(total))
+                var output = buffer
+                if skip > 0 {
+                    // Drop the effects' start-up delay so audio stays aligned with the original.
+                    if AVAudioFramePosition(buffer.frameLength) <= skip { skip -= AVAudioFramePosition(buffer.frameLength); continue }
+                    output = dropFirst(Int(skip), of: buffer)
+                    skip = 0
+                }
+                try cleanedFile?.write(from: output)
+                try appendConverted(output, with: toSpeech, to: speechFile)
+                progress(min(1, Double(engine.manualRenderingSampleTime) / Double(end)))
             case .insufficientDataFromInputNode, .cannotDoInCurrentContext:
                 stalls += 1
                 if stalls > 10_000 { throw AudioPreparationError.failed("the audio engine stalled") }
@@ -162,7 +194,33 @@ enum AudioPreparer {
             @unknown default: throw AudioPreparationError.failed("unknown render status")
             }
         }
+        try flush(toSpeech, to: speechFile)
         return isolation
+    }
+
+    private static func dropFirst(_ frames: Int, of buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let count = Int(buffer.frameLength) - frames
+        let out = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: AVAudioFrameCount(max(count, 1)))!
+        out.frameLength = AVAudioFrameCount(max(count, 0))
+        for channel in 0..<Int(buffer.format.channelCount) {
+            if let from = buffer.floatChannelData?[channel], let to = out.floatChannelData?[channel], count > 0 {
+                to.update(from: from + frames, count: count)
+            }
+        }
+        return out
+    }
+
+    /// Writes what the resampler still holds (its last few milliseconds).
+    private static func flush(_ converter: AVAudioConverter, to file: AVAudioFile) throws {
+        while true {
+            let out = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: 4096)!
+            let status = converter.convert(to: out, error: nil) { _, inputStatus in
+                inputStatus.pointee = .endOfStream
+                return nil
+            }
+            if out.frameLength > 0 { try file.write(from: out) }
+            if status != .haveData || out.frameLength == 0 { break }
+        }
     }
 
     /// Streams any readable file into `destination` in `format`, resampling and mixing to mono.
@@ -210,11 +268,12 @@ enum AudioPreparer {
         if out.frameLength > 0 { try file.write(from: out) }
     }
 
-    /// Average loudness of the louder half of the recording, in dBFS (ignores pauses).
-    static func loudness(_ url: URL) throws -> Double {
+    /// Loudness of the louder half of the recording (speech) and its noise floor (10th percentile), in dBFS.
+    static func levelSummary(_ url: URL) throws -> (loud: Double, floor: Double) {
         let (levels, _) = try SpeechDetector.levels(of: url)
-        guard !levels.isEmpty else { return -120 }
-        let loud = levels.sorted().suffix(max(1, levels.count / 2))
-        return loud.reduce(0, +) / Double(loud.count)
+        guard !levels.isEmpty else { return (-120, -120) }
+        let sorted = levels.sorted()
+        let loud = sorted.suffix(max(1, sorted.count / 2))
+        return (loud.reduce(0, +) / Double(loud.count), sorted[Int(Double(sorted.count - 1) * 0.1)])
     }
 }
