@@ -1,0 +1,15 @@
+import SwiftUI
+
+@main
+struct MentalityApp: App {
+    @StateObject private var library = LibraryModel(demo: CommandLine.arguments.contains("--ui-demo"))
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(library)
+                // "Open in Mentality" from Notability's share sheet or the Files app.
+                .onOpenURL { url in library.importFiles([url]) }
+        }
+    }
+}

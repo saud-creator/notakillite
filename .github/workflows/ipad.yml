@@ -1,0 +1,108 @@
+name: iPad app
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ipad-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipados18:
+    name: iPadOS 18 · build, tests on iPad Pro (M4) simulator, real speech, IPA
+    runs-on: macos-15
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Xcode 16 (iPadOS 18 SDK)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$XCODE" ]; then sudo xcode-select -s "$XCODE"; fi
+          xcodebuild -version
+          xcrun simctl list runtimes | grep -i ios
+
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: build/spm
+          key: spm-${{ runner.os }}-${{ hashFiles('project.yml') }}
+
+      - name: Pick iPad simulator
+        run: |
+          echo "IPAD=$(python3 ci/pick-simulator.py 18)" >> "$GITHUB_ENV"
+
+      - name: Make spoken test lectures (English and Arabic)
+        run: bash ci/make-speech.sh "$RUNNER_TEMP/speech" | tee -a "$GITHUB_ENV"
+
+      - name: Unit and end-to-end tests on iPad simulator
+        env:
+          TEST_RUNNER_MENTALITY_E2E_OUT: ${{ runner.temp }}/transcripts
+        run: |
+          set -o pipefail
+          xcodebuild test -project Mentality.xcodeproj -scheme Mentality -derivedDataPath build/dd \
+            -clonedSourcePackagesDirPath build/spm \
+            -destination "id=$IPAD" -resultBundlePath build/Tests.xcresult CODE_SIGNING_ALLOWED=NO \
+            | tee build/test.log | grep -E "error:|warning: .*Mentality|Test Case.*(passed|failed|skipped)|Executed|\*\* TEST" || true
+          grep -q "\*\* TEST SUCCEEDED \*\*" build/test.log
+
+      - name: Transcripts made by the end-to-end test
+        if: always()
+        run: |
+          for f in "$RUNNER_TEMP"/transcripts/*.md; do [ -f "$f" ] && { echo "::group::$(basename "$f")"; cat "$f"; echo "::endgroup::"; }; done; true
+
+      - name: Screenshots (sample data)
+        if: success()
+        run: |
+          APP=build/dd/Build/Products/Debug-iphonesimulator/Mentality.app
+          bash ci/screenshot.sh "$IPAD" "$APP" build/screenshots/ipad-light.png light
+          bash ci/screenshot.sh "$IPAD" "$APP" build/screenshots/ipad-dark.png dark
+
+      - name: Build unsigned IPA (runs on iPadOS 18 and later)
+        run: |
+          set -o pipefail
+          xcodebuild archive -project Mentality.xcodeproj -scheme Mentality -configuration Release \
+            -clonedSourcePackagesDirPath build/spm \
+            -destination 'generic/platform=iOS' -archivePath build/Mentality.xcarchive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -5
+          mkdir -p build/ipa/Payload
+          cp -R build/Mentality.xcarchive/Products/Applications/Mentality.app build/ipa/Payload/
+          (cd build/ipa && zip -qr ../Mentality-unsigned.ipa Payload)
+          plutil -p build/ipa/Payload/Mentality.app/Info.plist | grep -E "MinimumOSVersion|DTSDKName|UIDeviceFamily" -A2
+          ls -lh build/Mentality-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mentality-iPad-unsigned-ipa
+          path: build/Mentality-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-and-screenshots
+          path: |
+            build/screenshots
+            build/test.log
+            ${{ runner.temp }}/transcripts
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --title "Mentality $GITHUB_REF_NAME" --notes "Unsigned iPad build. Install with Sideloadly (see README)."
+          gh release upload "$GITHUB_REF_NAME" build/Mentality-unsigned.ipa --clobber
