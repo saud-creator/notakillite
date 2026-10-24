@@ -1,11 +1,13 @@
 name: Whisper check
 
 # Why does Whisper write (almost) no text on the iPadOS 18 simulator when the same test passes on the
-# iOS 27 iPhone simulator? First run: on the macOS 15 runner it fails with Xcode 16 and 26 and on
-# iOS 18.6 and 26.2 simulators alike, so the runner is the suspect. This run tries the iPadOS 18
-# simulator on the macOS 26 runner, an iPad simulator on the runner the iPhone uses, and repeats the
-# macOS 15 and iPhone runs with the "DIAG" lines (model input and output statistics, language,
-# tokens, text). Runs when this check changes, or by hand.
+# iOS 27 iPhone simulator? Findings so far: on the macOS 15 runner (macOS 15.7, virtual M1) the
+# simulator computes Whisper's audio encoder wrongly with Xcode 16 and 26 and on iOS 18.6 and 26.2
+# alike (the spectrogram going in is identical), while an iPad simulator on the Xcode 27 runner
+# (macOS 27, the same virtual M1) transcribes English and Arabic correctly. The macOS 26 runner has
+# no iOS 18 simulator. This run downloads the iOS 18.6 simulator on the newer runners, to test
+# iPadOS 18 on a machine that computes correctly. Each job prints "DIAG" lines. Runs when this
+# check changes, or by hand.
 
 on:
   push:
@@ -23,41 +25,25 @@ jobs:
   check:
     name: ${{ matrix.title }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
         include:
-          - title: macOS 26 runner · Xcode 26 · iPad · iOS 18
+          - title: Xcode 27 runner · iPad · iOS 18.6 (downloaded)
+            runner: xcode-27
+            xcode: ""
+            download: "18.6"
+            os: "18"
+            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
+            create: iPad Pro 13-inch (M4)
+          - title: macOS 26 runner · Xcode 26 · iPad · iOS 18.6 (downloaded)
             runner: macos-26
             xcode: "26"
+            download: "18.6"
             os: "18"
             prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
             create: iPad Pro 13-inch (M4)
-          - title: macOS 26 runner · Xcode 16 · iPad · iOS 18
-            runner: macos-26
-            xcode: "16"
-            os: "18"
-            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
-            create: iPad Pro 13-inch (M4)
-          - title: macOS 15 runner · Xcode 16 · iPad · iOS 18
-            runner: macos-15
-            xcode: "16"
-            os: "18"
-            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
-            create: iPad Pro 13-inch (M4)
-          - title: Xcode 27 runner · iPad · iOS 27
-            runner: xcode-27
-            xcode: ""
-            os: "27"
-            prefer: iPad Pro 13-inch (M4),iPad Pro 11-inch (M4)
-            create: iPad Pro 13-inch (M4)
-          - title: Xcode 27 runner · iPhone 15 Pro · iOS 27 (reference)
-            runner: xcode-27
-            xcode: ""
-            os: "27"
-            prefer: iPhone 15 Pro
-            create: com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +57,14 @@ jobs:
           ls -d /Applications/Xcode*.app
           xcodebuild -version
           echo "macOS $(sw_vers -productVersion), $(sysctl -n machdep.cpu.brand_string)"
+          xcrun simctl list runtimes | grep -i ios
+
+      - name: Download the iOS ${{ matrix.download }} simulator
+        if: matrix.download != ''
+        run: |
+          if xcrun simctl list runtimes | grep -q "iOS ${{ matrix.download }} "; then exit 0; fi
+          xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.download }}" \
+            || xcodebuild -downloadPlatform iOS -buildVersion "${{ matrix.download }}" -architectureVariant arm64
           xcrun simctl list runtimes | grep -i ios
 
       - name: Restore the noise models
