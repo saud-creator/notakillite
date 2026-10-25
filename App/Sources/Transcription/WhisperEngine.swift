@@ -239,18 +239,35 @@ actor WhisperEngine: SpeechEngine {
             options.promptTokens = Array(tokenizer.encode(text: " " + terms).filter { $0 < tokenizer.specialTokens.specialTokenBegin }.prefix(120))
         }
         let results = await pipe.transcribeWithResults(audioArrays: pieces, decodeOptions: options)
-        var out: [PieceResult] = []
-        for result in results {
-            switch result {
-            case .success(let list):
-                let segments = list.flatMap(\.segments).map { SpeechSegment(start: Double($0.start), end: Double($0.end), text: $0.text) }
-                out.append(PieceResult(segments: segments, language: language))
-            case .failure(let error):
-                if error is CancellationError { throw error }
-                throw WhisperEngineError.pieceFailed(error.localizedDescription)
+        var out = try results.map { try Self.pieceResult($0, language: language) }
+
+        // WhisperKit stops decoding a stretch of audio when its first word is unlikely (firstTokenLogProbThreshold),
+        // and when every retry stops the same way it returns the stretch with no text at all: speech the speech
+        // detector found would vanish without a trace (seen with Arabic on a small model). Such pieces are decoded
+        // once more without that early stop, as the original Whisper does; the quality check still judges the text.
+        // (A stretch Whisper judges silent comes back with no segments and is left alone.)
+        let emptied = out.indices.filter { i in
+            !out[i].segments.isEmpty && out[i].segments.allSatisfy { $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        }
+        if !emptied.isEmpty {
+            options.firstTokenLogProbThreshold = nil
+            let again = await pipe.transcribeWithResults(audioArrays: emptied.map { pieces[$0] }, decodeOptions: options)
+            for (n, result) in again.enumerated() where n < emptied.count {
+                out[emptied[n]] = try Self.pieceResult(result, language: language)
             }
         }
         return out
+    }
+
+    private static func pieceResult(_ result: Result<[TranscriptionResult], Swift.Error>, language: String) throws -> PieceResult {
+        switch result {
+        case .success(let list):
+            let segments = list.flatMap(\.segments).map { SpeechSegment(start: Double($0.start), end: Double($0.end), text: $0.text) }
+            return PieceResult(segments: segments, language: language)
+        case .failure(let error):
+            if error is CancellationError { throw error }
+            throw WhisperEngineError.pieceFailed(error.localizedDescription)
+        }
     }
 }
 
