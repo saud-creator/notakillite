@@ -1,4 +1,9 @@
 // Local JSON-line inference worker. Uses the pinned upstream whisper.cpp API unchanged.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#endif
 #include "whisper.h"
 #include "json.hpp"
 #include <algorithm>

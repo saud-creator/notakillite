@@ -32,5 +32,5 @@ for config,language in [('en_us','en'),('ar_eg','ar')]:
         child.stdout.close();child.terminate();child.wait()
     if selected<count: raise RuntimeError('Insufficient public fixtures')
 manifest=dict(fixtures=fixtures,profiles=[dict(id='tiny-cli',options=dict(model='tiny',chunkSeconds=0,backend='cpu'))])
-(out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2))
+(out/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2), encoding='utf-8')
 print(json.dumps(dict(fixtures=len(fixtures),revision=revision,manifest=str(out/'manifest.json'))))

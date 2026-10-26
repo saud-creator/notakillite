@@ -127,9 +127,8 @@ test('cached models with matching size but changed bytes fail verification',asyn
   assert.equal(await verifiedModel(file,model),true);await writeFile(file,'abce');assert.equal(await verifiedModel(file,model),false);
 });
 test('persistent worker cancellation rejects pending requests and restart stays isolated',async t=>{
-  if(process.platform==='win32') return t.skip('POSIX synthetic worker; actual packaged worker is checked separately on Windows');
-  const {WhisperWorker}=await import('../companion/persistent-whisper.mjs');const {chmod}=await import('node:fs/promises');const d=await temp(t),file=path.join(d,'worker.mjs');
-  await writeFile(file,"#!/usr/bin/env node\nimport{createInterface}from'node:readline';createInterface({input:process.stdin}).on('line',s=>{const r=JSON.parse(s);if(!r.hang)console.log(JSON.stringify({id:r.id,result:{ok:true}}));});\n");await chmod(file,0o700);
+  const {WhisperWorker}=await import('../companion/persistent-whisper.mjs');const d=await temp(t),file=path.join(d,'worker.mjs');
+  await writeFile(file,"import{createInterface}from'node:readline';createInterface({input:process.stdin}).on('line',s=>{const r=JSON.parse(s);if(!r.hang)console.log(JSON.stringify({id:r.id,result:{ok:true}}));});\n");
   const worker=new WhisperWorker(process.execPath,file);try {assert.ok((await worker.request({})).ok);const controller=new AbortController();const request=worker.request({hang:true},controller.signal);controller.abort();await assert.rejects(request,{name:'AbortError'});assert.ok((await worker.request({})).ok);}finally{worker.close();}
 });
 

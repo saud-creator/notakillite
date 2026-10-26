@@ -27,4 +27,13 @@ cmake --build .local/native-build --config Release --target notakillite-worker w
 
 Pin whisper.cpp to `d1be6fde11ac6e0407606b4e42fe72d34add8037`. Test a developer worker using `NOTAKILLITE_WORKER`; packaged builds discover workers beside their backend executables. The worker keeps one model loaded and uses its tokenizer to bound vocabulary to 96 tokens. CPU fallback retains the selected model.
 
+For a CPU-only Windows build, explicitly add `-A x64 -DBUILD_SHARED_LIBS=ON -DGGML_VULKAN=OFF -DGGML_CUDA=OFF -DGGML_NATIVE=OFF -DWHISPER_SDL2=OFF` to configuration. Use the installed Visual Studio CMake executable if CMake is not on PATH. Keep the resulting worker, matching CLI and DLLs together; do not mix DLLs from different builds. With the pinned Tiny model already downloaded, run the offline native acceptance check:
+
+```powershell
+$env:NOTAKILLITE_MODELS_DIR = "$PWD\.local\models"
+node scripts/test-native-worker.mjs .local/native-cpu/bin/Release/notakillite-worker.exe .local/native-worker-report.json
+```
+
+This checks actual inference, retained model reuse, Unicode paths, the tokenizer budget, cancellation and restart. Its memory measurement covers the worker alone. It does not establish Arabic/medical accuracy or GPU support. If a project-local SDK exists under `.tools/dotnet`, restore the desktop project with that SDK before its first build; a runtime-only system `dotnet` cannot build WPF. Low available memory can intentionally reject a processing job; finish idle development builds before comparing memory-sensitive runs.
+
 Keep API keys local; no private recording was uploaded during development. A passed automated audit does not mean every spoken word or critical number was verified. Tiny/Arabic had an upstream crash in public screening; use the tested turbo profile until that combination is resolved.

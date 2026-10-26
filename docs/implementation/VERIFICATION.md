@@ -1,6 +1,8 @@
 # Desktop implementation verification
 
-Starting commit: `4057da59ce4a6be8857a1f78fa90d4a0bba7dff9`. Local branch: `desktop/lecture-pipeline`. Development environment: Linux x86-64; effective CPU quota 2; no supported physical GPU exposed. No changes were published to GitHub and no private audio/PDF was uploaded. The full roadmap is not complete and this is not a verified Windows release.
+Historical starting commit: `4057da59ce4a6be8857a1f78fa90d4a0bba7dff9`. The original development environment was Linux x86-64 with an effective CPU quota of 2 and no supported physical GPU exposed. Publication had not occurred during those historical tests; the implementation was subsequently transferred to GitHub as `0d3f760be920d196d3a5c7acb3e2e2bb626d5eba` on `codex/desktop-lecture-pipeline-20261026-8c9fb91`. No private audio/PDF was uploaded. The full roadmap is not complete and this is not a verified Windows release.
+
+Windows continuation results are recorded separately in [the 26 October 2026 report](WINDOWS-2026-10-26.md). The sections below preserve the original Linux evidence and its limitations.
 
 ## Passed and measured
 

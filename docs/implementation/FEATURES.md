@@ -10,7 +10,7 @@
 | Numbered Markdown, batch index and audio exports | Preserved; unique owned folders and separate retry generations |
 | Saved queue and interrupted jobs | Improved; chunk checkpoints and queued/active pause/resume |
 | CPU and RAM policy | Added quota-aware budgets, bounded dispatch, explicit controls and readiness |
-| GPU | Existing Vulkan preserved; native worker can use compiled Vulkan/CUDA; actual hardware verification pending |
+| GPU | Existing Vulkan preserved; native CPU worker now builds and runs on Windows; Vulkan/CUDA offload remains unverified |
 | Model downloads | Resume, per-process locking, cached-content hash verification and cancellation API |
 | PDF assistance | Local page extraction/rendering, optional local OCR, glossary and approximate lexical references |
 | PDF vocabulary bias | Experimental opt-in after measured accuracy regression; reviewed passage candidates available |
@@ -20,3 +20,5 @@
 | Performance and accuracy | Offline runner, public pinned corpus importer, strict/normalized WER/CER and recorded short-clip experiments |
 | Packaging | Native worker build, PDF/native canvas payload, actual packaged ASR smoke and CI package gate added; Windows execution pending |
 | Study generation/translation/diarization/multi-GPU | Intentionally deferred after core acceptance |
+
+See [Windows continuation evidence](WINDOWS-2026-10-26.md) for the hardware, actual checks, failures and acceptance limits. Windows worker cancellation/restart coverage now runs without a POSIX-only skip. The public FLEURS importer writes its Arabic manifest explicitly as UTF-8 on Windows.
