@@ -16,7 +16,7 @@ import { pathsFor, preparePaths, isInside } from './paths.mjs';
 import { availableEngines, requireEngine, settings, assets, ENGINE_NAMES, TRANSCRIPT_DEFAULTS } from '../companion/engines.mjs';
 import { processAudio, runTool, safeName } from '../companion/audio.mjs';
 import { expandImports, extractEntry, zipEntries } from '../companion/notability-import.mjs';
-import { transcribeAudio, cutWav } from '../companion/transcribe.mjs';
+import { transcribeAudio, speechWav, cutWav } from '../companion/transcribe.mjs';
 import { indexMarkdown, lectureMarkdown, qualityLabel, wordCount } from '../companion/transcript-format.mjs';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { ensureModel, whisperStatus, WHISPER_MODELS, spawnLines } from '../companion/whisper.mjs';
@@ -393,10 +393,17 @@ export class CoreService extends EventEmitter {
         this.reviewRetry = new AbortController();
         const directory = await mkdtemp(path.join(this.paths.temp,'review-'));
         try {
-          const input = job.input && await exists(job.input) ? job.input : job.localFile && await exists(job.localFile) ? job.localFile : job.files.find(f => f.kind !== 'transcript')?.path;
-          if(!input) throw new Error('Source audio is unavailable. Import it again.');
+          // Prefer a retained/local original. Completed Notability jobs have neither, so assemble
+          // their independently timestamp-reset output parts before applying global transcript times.
+          let input = job.input && await exists(job.input) ? job.input : job.localFile && await exists(job.localFile) ? job.localFile : null;
+          if(!input) {
+            const parts = (job.files || []).filter(f => f.kind !== 'transcript');
+            if(!parts.length || parts.some(f => typeof f.path !== 'string')) throw new Error('Processed audio is unavailable. Re-export the lecture before retrying a passage.');
+            for(const part of parts) if(!await exists(part.path)) throw new Error('A processed audio part is unavailable. Re-export the lecture before retrying a passage.');
+            input = parts.length === 1 ? parts[0].path : (await speechWav({ ffmpeg, inputs:parts.map(f=>f.path), work:directory, signal:this.reviewRetry.signal })).wav;
+          }
           const target = path.join(directory,'passage.wav');
-          await runTool(ffmpeg,['-y','-ss',String(segment.start),'-t',String(Math.max(.1,segment.end-segment.start)),'-i',input,'-ac','1','-ar','16000','-c:a','pcm_s16le',target],{ signal:this.reviewRetry.signal });
+          await cutWav({ ffmpeg, wav:input, start:segment.start, end:Math.max(segment.start + .1, segment.end), target, signal:this.reviewRetry.signal });
           const result = await (this.options.transcribe || transcribeAudio)({ ffmpeg,inputs:[target],work:directory,context:await readLecturePdfs(job.pdfs || [],{signal:this.reviewRetry.signal}),options:{...job.options,chunkSeconds:0,pdfBias:true},modelsDir:this.modelsDir,secrets:this.secrets,signal:this.reviewRetry.signal });
           return { revision:doc.revision, segments:result.segments, quality:result.quality, candidateOnly:true };
         } finally { this.reviewRetry = null; closeWorkers(); await rm(directory,{ recursive:true,force:true }); void this.pump(); }

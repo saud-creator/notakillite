@@ -16,6 +16,8 @@ Windows M5 follow-up: actual review-window interaction exposed selected source/P
 
 A second observed M5 issue left the review label at `unreviewed` after a successful edit had been saved as `edited`. The label now refreshes from the server document after save/history restore/candidate discard; error and retry-pending messages remain intact. Compiler verification passed; actual rebuilt UI interaction is required before closing the gate.
 
+Passage retry now joins processed split files before applying global transcript timestamps when a retained/local original is unavailable. Regression coverage verifies a cross-file passage, a passage wholly in part two, original-source preference, stale revisions and a missing part without transcript mutation; the related Windows suite passed 25/25. ASR still receives only the selected interval; assembling processed parts can require decoding the full recording first.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |
