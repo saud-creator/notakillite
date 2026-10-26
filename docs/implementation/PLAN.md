@@ -4,6 +4,8 @@ Starting commit: 4057da59ce4a6be8857a1f78fa90d4a0bba7dff9. Isolated branch: desk
 
 Current continuation branch: `codex/desktop-lecture-pipeline-20261026-8c9fb91`, transferred at `0d3f760be920d196d3a5c7acb3e2e2bb626d5eba`. The [Windows continuation report](WINDOWS-2026-10-26.md) records the current baseline, fixes and remaining gates separately from the historical handoff below.
 
+26 October Windows M1 follow-up: final merged recovery findings now produce merged timed review markers before export; raw ASR and trusted neighboring text remain available. The related Windows recovery/desktop suite passed 29/29 without skips. Complete packaged/UI acceptance remains separate.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |

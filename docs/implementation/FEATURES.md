@@ -14,7 +14,7 @@
 | Model downloads | Resume, per-process locking, cached-content hash verification and cancellation API |
 | PDF assistance | Local page extraction/rendering, optional local OCR, glossary and approximate lexical references |
 | PDF vocabulary bias | Experimental opt-in after measured accuracy regression; reviewed passage candidates available |
-| Review/edit/export | New player/text/PDF window; autosave, raw text/history, undo/redo and manual candidate acceptance; TXT/MD/SRT/VTT/JSON |
+| Review/edit/export | New player/text/PDF window; autosave, raw text/history, undo/redo and manual candidate acceptance; TXT/MD/SRT/VTT/JSON; final merged recovery findings also receive timed review markers |
 | Course glossary and transcript search | Added local dictionaries and timestamped FTS search |
 | Language/accessibility | New controls bilingual; existing RTL behavior retained; complete resource-based localization and Narrator QA remain pending |
 | Performance and accuracy | Offline runner, public pinned corpus importer, strict/normalized WER/CER and recorded short-clip experiments |

@@ -98,6 +98,41 @@ test('a loop in the first pass is repaired from source audio; neighbouring parts
   assert.ok(calls.length < 12);
 });
 
+test('a final-only repetition crossing a repaired window gets a timed marker without losing trusted neighbors', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
+  const ctx = await setup(t, 6);
+  const repeated = 'The conjoint tendon is formed by the internal oblique and transversus abdominis.';
+  const before = 'This trusted statement remains before the flagged passage.';
+  const after = 'This trusted statement remains after the flagged passage.';
+  const { runner, calls } = mockWhisper(({ duration, file }) => {
+    if (file !== 'speech-16k.wav') return [{ start: 0.5, end: 3, text: repeated }];
+    return [...normal(duration, 31),
+      { start: 100, end: 103, text: before },
+      { start: 220, end: 223, text: repeated },
+      { start: 235, end: 238, text: repeated },
+      { start: 250, end: 250, text: 'first pass decoder glitch words here' },
+      { start: 265, end: 268, text: repeated },
+      { start: 320, end: 323, text: after },
+    ].sort((a, b) => a.start - b.start);
+  });
+  const result = await run(ctx, runner);
+  assert.equal(result.quality.status, 'needs-review');
+  assert.ok(result.quality.attempts.length > 0 && result.quality.attempts.length <= RECOVERY.maxAttemptsPerPiece);
+  assert.equal(result.quality.attempts[0].status, 'ok', 'the recovery candidate passes its local audit');
+  assert.equal(result.quality.repairs.length, 1);
+  assert.equal(result.quality.unresolved.length, 1, JSON.stringify(result.quality.unresolved));
+  assert.ok(result.quality.unresolved[0].reasons.includes('repeated-sentence'), JSON.stringify(result.quality.unresolved));
+  const marker = result.segments.find(s => s.marker && /Not reliably transcribed/.test(s.text));
+  assert.ok(marker, 'final merged finding must have a visible review marker');
+  assert.ok(marker.start <= 220 && marker.end >= 268, JSON.stringify({ marker, unresolved: result.quality.unresolved }));
+  assert.match(marker.text, /repeated-sentence/);
+  assert.match(marker.text, /\(\d{2}:\d{2}:\d{2}–\d{2}:\d{2}:\d{2}\)/, 'the review marker has a visible time range');
+  assert.ok(result.rawSegments.some(s => s.text === 'first pass decoder glitch words here'), 'raw ASR is retained');
+  assert.ok(result.segments.some(s => !s.marker && s.text === before), 'trusted text before the flagged interval stays');
+  assert.ok(result.segments.some(s => !s.marker && s.text === after), 'trusted text after the flagged interval stays');
+  assert.ok(!result.quality.finalAudit.findings.some(f => f.kind === 'repeated-sentence'), 'the marker removes the untrusted repeated text from the exported transcript');
+  assert.ok(calls.length <= 1 + RECOVERY.maxAttemptsPerPiece, `unexpected retries: ${calls.length}`);
+});
+
 test('retry exhaustion ends as needs-review with a visible marker and a bounded number of runs', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
   const ctx = await setup(t, 16);
   const { runner, calls } = mockWhisper(({ duration }) => looping(duration, Math.min(60, duration)));

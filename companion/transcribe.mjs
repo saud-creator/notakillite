@@ -199,20 +199,24 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
     }
   }
 
-  // Parts that could not be repaired: keep everything outside the bad intervals, replace the bad
-  // intervals with a visible marker. Never a guessed continuation.
-  for (const part of unresolved) {
-    const bad = mergeIntervals(part.findings.map(f => ({ start: Math.max(0, f.start - 3), end: Math.min(duration, Math.max(f.end, f.start + 1) + 3) })));
-    for (const interval of bad) {
-      segments = segments.filter(s => s.marker || s.end <= interval.start || s.start >= interval.end);
-      segments.push({ start: interval.start, end: interval.end, marker: true, text: `Not reliably transcribed (${timeLabel(interval.start)}–${timeLabel(interval.end)}) — check the audio. Reason: ${part.reasons.join(', ')}.` });
-    }
+  // Audit the merged candidate before masking unresolved passages. This catches new cross-window
+  // findings while avoiding false missing-text findings caused by the review markers themselves.
+  const mergedAudit = auditTranscript(segments.filter(s => !s.marker), { duration, pieces, speech, config });
+  for (const finding of mergedAudit.findings) addUnresolvedFinding(unresolved, finding);
+
+  // Keep everything outside bad intervals and replace each merged interval with one visible marker.
+  // Never fill a gap with a guess, and never let duplicate findings create duplicate markers.
+  const bad = mergeIntervals(unresolved.flatMap(part => (part.findings || []).map(f => ({
+    start: Math.max(0, f.start - 3), end: Math.min(duration, Math.max(f.end, f.start + 1) + 3), reasons: [f.kind],
+  }))));
+  for (const interval of bad) {
+    segments = segments.filter(s => s.marker || s.end <= interval.start || s.start >= interval.end);
+    segments.push({ start: interval.start, end: interval.end, marker: true, text: `Not reliably transcribed (${timeLabel(interval.start)}–${timeLabel(interval.end)}) — check the audio. Reason: ${interval.reasons.join(', ')}.` });
   }
   segments = assemble(segments, log);
   for (let i = 1; i < segments.length; i++) if (segments[i].start < segments[i - 1].start) throw new Error('Internal error: transcript segments are out of order.');
 
   const final = auditTranscript(segments.filter(s => !s.marker), { duration, pieces, speech, config });
-  for (const finding of final.findings) if (!unresolved.some(u => u.start <= finding.start && u.end >= finding.end)) unresolved.push({ start: finding.start, end: finding.end, reasons: [finding.kind] });
   const status = unresolved.length || final.status !== 'ok' ? 'needs-review' : repairs.length ? 'repaired' : 'ok';
   log({ event: 'quality', status, finalAudit: final.status, repairs: repairs.length, unresolved: unresolved.length, attempts: attempts.length, words: wordCount(segments) });
   onStage({ phase: 'Quality check complete', fraction: 1 });
@@ -225,8 +229,29 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
 
 function mergeIntervals(list) {
   const sorted = [...list].sort((a, b) => a.start - b.start), out = [];
-  for (const x of sorted) { const last = out.at(-1); if (last && x.start <= last.end + 5) last.end = Math.max(last.end, x.end); else out.push({ ...x }); }
+  for (const x of sorted) {
+    const last = out.at(-1);
+    if (last && x.start <= last.end + 5) {
+      last.end = Math.max(last.end, x.end);
+      last.reasons = [...new Set([...(last.reasons || []), ...(x.reasons || [])])];
+    } else out.push({ ...x, reasons: [...(x.reasons || [])] });
+  }
   return out;
+}
+
+function addUnresolvedFinding(unresolved, finding) {
+  const matches = unresolved.filter(item => finding.start <= item.end && finding.end >= item.start);
+  if (!matches.length) {
+    unresolved.push({ start: finding.start, end: finding.end, reasons: [finding.kind], findings: [finding] });
+    return;
+  }
+  const target = matches[0];
+  const findings = [...matches.flatMap(item => item.findings || []), finding];
+  target.start = Math.min(finding.start, ...matches.map(item => item.start));
+  target.end = Math.max(finding.end, ...matches.map(item => item.end));
+  target.reasons = [...new Set([...matches.flatMap(item => item.reasons || []), finding.kind])];
+  target.findings = [...new Map(findings.map(item => [`${item.kind}:${item.start}:${item.end}`, item])).values()];
+  for (const item of matches.slice(1)) unresolved.splice(unresolved.indexOf(item), 1);
 }
 
 /** Ordered retry strategies for one piece. Each returns segments with absolute timestamps. */
