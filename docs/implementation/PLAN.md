@@ -10,6 +10,8 @@ Windows packaging follow-up: the outer launcher now forwards explicit local-only
 
 Windows M2 follow-up: execution planning now reflects the single synchronous persistent model worker and the actual number of CLI chunks. A serial worker receives the full allowed thread budget; requested workers and limiting reasons remain in diagnostics. The complete desktop/pipeline file passed 24/24. RAM estimates/reserve and defaults were retained; calibration and process-tree supervision remain open.
 
+Windows M4 follow-up: direct testing of the CI Vulkan worker exposed missing dynamic backend initialization (`devices=0`, `backends=0`, assertion before inference), which CLI fallback could hide. The wrapper now loads pinned ggml backends before model initialization. Actual direct GPU-required and dynamic CPU worker checks passed on this PC, including model retention/cancellation. CI now requires a direct CPU worker check using its dynamic Vulkan bundle; this is distinct from packaged CLI success. Final committed-source GPU timing and broader device/failure coverage remain open.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |

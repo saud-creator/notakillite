@@ -34,6 +34,8 @@ $env:NOTAKILLITE_MODELS_DIR = "$PWD\.local\models"
 node scripts/test-native-worker.mjs .local/native-cpu/bin/Release/notakillite-worker.exe .local/native-worker-report.json
 ```
 
+For a dynamic Vulkan build, the wrapper loads ggml backends before loading the model. The same direct test accepts `--backend cpu` to validate CPU operation inside that bundle, `--backend auto` to observe the selected device, or `--backend gpu-required` to fail unless actual GPU inference is reported with selected-backend evidence. No CLI fallback is allowed in this test. A compiled Vulkan file alone is not proof of acceleration.
+
 This checks actual inference, retained model reuse, Unicode paths, the tokenizer budget, cancellation and restart. Its memory measurement covers the worker alone. It does not establish Arabic/medical accuracy or GPU support. If a project-local SDK exists under `.tools/dotnet`, restore the desktop project with that SDK before its first build; a runtime-only system `dotnet` cannot build WPF. Low available memory can intentionally reject a processing job; finish idle development builds before comparing memory-sensitive runs.
 
 The packaged launcher accepts `--no-connect` and an explicit `--data-dir` for isolated local-only use. For example, `release\Notakillite.exe --data-dir "$PWD\.local\desktop-qa" --no-connect` uses separate QA data and does not prepare the Brave connector. Without an explicit data directory, the existing `%LOCALAPPDATA%\Notakillite` location is retained. The build requires Windows x64 Node.js 24 so it cannot silently bundle a different runtime. `npm run test:packaged` includes ordinary launcher startup and repair of a cached extraction missing its Node executable, in addition to audio/ASR/PDF checks.

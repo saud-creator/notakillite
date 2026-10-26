@@ -5,6 +5,7 @@
 #endif
 #endif
 #include "whisper.h"
+#include "ggml-backend.h"
 #include "json.hpp"
 #include <algorithm>
 #include <chrono>
@@ -55,6 +56,7 @@ static std::vector<float> wav(const std::string &name) {
 static int run(int argc, char **argv) {
     if(argc<2) return 2;
     whisper_log_set(logger,nullptr);
+    ggml_backend_load_all();
     auto cp=whisper_context_default_params(); cp.use_gpu= !(argc>2 && std::string(argv[2])=="--cpu");
     auto *ctx=whisper_init_from_file_with_params(argv[1],cp); if(!ctx) return 3;
     std::string line;

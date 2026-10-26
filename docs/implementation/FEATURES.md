@@ -10,7 +10,7 @@
 | Numbered Markdown, batch index and audio exports | Preserved; unique owned folders and separate retry generations |
 | Saved queue and interrupted jobs | Improved; chunk checkpoints and queued/active pause/resume |
 | CPU and RAM policy | Quota-aware budgets, bounded dispatch, explicit controls and readiness; effective workers capped by actual serial native execution or CLI chunk count, with requested count and limiting reasons retained |
-| GPU | Existing Vulkan preserved; native CPU worker now builds and runs on Windows; Vulkan/CUDA offload remains unverified |
+| GPU | Native CPU and dynamic backend startup verified on Windows; direct retained-worker Vulkan offload observed on one local device; CUDA and broader hardware/failure coverage remain unverified |
 | Model downloads | Resume, per-process locking, cached-content hash verification and cancellation API |
 | PDF assistance | Local page extraction/rendering, optional local OCR, glossary and approximate lexical references |
 | PDF vocabulary bias | Experimental opt-in after measured accuracy regression; reviewed passage candidates available |

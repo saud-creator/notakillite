@@ -104,6 +104,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Test direct native worker (CPU)
+        run: node scripts/test-native-worker.mjs vendor/whisper/vulkan/notakillite-worker.exe .local/native-worker-report.json --backend cpu
+
       - name: Build EXE
         run: node scripts/build-exe.mjs
 
