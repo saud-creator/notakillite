@@ -10,11 +10,11 @@
 | Numbered Markdown, batch index and audio exports | Preserved; unique owned folders and separate retry generations |
 | Saved queue and interrupted jobs | Improved; chunk checkpoints and queued/active pause/resume |
 | CPU and RAM policy | Quota-aware budgets, bounded dispatch, explicit controls and readiness; effective workers capped by actual serial native execution or CLI chunk count, with requested count and limiting reasons retained |
-| GPU | Native CPU and dynamic backend startup verified on Windows; direct retained-worker Vulkan offload observed on one local device; CUDA and broader hardware/failure coverage remain unverified |
+| GPU | Native CPU and dynamic backend startup verified on Windows; Intel UHD 750 and NVIDIA MX350 Vulkan inference observed; fitting dedicated-GPU selection and actual device-name reporting; CUDA and broader hardware/failure coverage remain unverified |
 | Model downloads | Resume, per-process locking, cached-content hash verification and cancellation API |
 | PDF assistance | Local page extraction/rendering, optional local OCR, glossary and approximate lexical references |
 | PDF vocabulary bias | Experimental opt-in after measured accuracy regression; reviewed passage candidates available |
-| Review/edit/export | New player/text/PDF window; autosave, raw text/history, undo/redo and manual candidate acceptance; TXT/MD/SRT/VTT/JSON; final merged findings receive timed markers; processed split-file passage retries preserve the whole-lecture time base |
+| Review/edit/export | New player/text/PDF window; serialized autosave/history/close barriers, raw text/history, undo/redo and manual candidate acceptance; job-scoped retry cancellation; TXT/MD/SRT/VTT/JSON; final merged findings receive timed markers; processed split-file passage retries preserve the whole-lecture time base |
 | Course glossary and transcript search | Added local dictionaries and timestamped FTS search |
 | Language/accessibility | New controls bilingual; named review selectors/editor/timeline/list and corrected selected-item labels; existing RTL behavior retained; complete resource-based localization and Narrator QA remain pending |
 | Performance and accuracy | Offline runner, public pinned corpus importer, strict/normalized WER/CER and recorded short-clip experiments |

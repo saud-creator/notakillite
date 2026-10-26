@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private string groqKey = "";
     private int revision = -1;
     private bool initialized, applying, busyConnect, closing, quit, playing, detailOpen, foldersOpen, queueExpanded;
+    private bool closeWorkflowRunning, shutdownReady;
     private string recordingSignature = "", folderSignature = "", currentTheme = "", connectionCode = "", connection = "", previousJobs = "";
     private string restoredRecordingRequest = "";
     private readonly HashSet<string> loadingNotes = [];
@@ -390,7 +391,7 @@ public partial class MainWindow : Window
         } catch (Exception error) { ShowError("Could not read the clipboard: " + error.Message); }
     }
     private void OnCopyTranscript(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) { var file = job.Value.Text("transcriptPath"); if (File.Exists(file)) { System.Windows.Clipboard.SetText(File.ReadAllText(file)); StatusText.Text = "Transcript copied. Paste it into ChatGPT or Claude."; } else ShowError("The transcript was moved or deleted. Open its export folder to check."); } }
-    private void OnReviewTranscript(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) new ReviewWindow(core,job) { Owner=this }.Show(); }
+    private void OnReviewTranscript(object sender, RoutedEventArgs e) { if (closing || closeWorkflowRunning || shutdownReady) return; if ((sender as Button)?.DataContext is JobModel job) new ReviewWindow(core,job) { Owner=this }.Show(); }
     private async void OnPauseJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("pause",new { id=job.Id }); }
     private async void OnResumeJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("resume",new { id=job.Id }); }
     private async void OnSaveCourse(object sender, RoutedEventArgs e) { await Command("saveCourse",new {name=CourseName.Text.Trim(),vocabulary=Vocabulary.Text.Trim()}); }
@@ -400,7 +401,7 @@ public partial class MainWindow : Window
         var root=new DockPanel {Margin=new Thickness(12)}; var input=new TextBox {MinHeight=30}; DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
         var find=new Button {Content="Search / بحث"};DockPanel.SetDock(find,Dock.Top);root.Children.Add(find);var results=new ListBox();root.Children.Add(results);window.Content=root;
         find.Click+=async (_,_)=>{ var found=await Command("searchTranscripts",new {text=input.Text});results.Items.Clear();if(found is JsonElement rows) foreach(var r in rows.Rows())results.Items.Add(new ListBoxItem {Content=r.Text("start")+"s · "+r.Text("text"),Tag=r.Clone()}); };
-        results.MouseDoubleClick+=(_,_)=>{if(results.SelectedItem is ListBoxItem item && item.Tag is JsonElement r) {var job=jobs.FirstOrDefault(j=>j.Id==r.Text("job"));if(job is not null)new ReviewWindow(core,job,r.Text("segment")){Owner=this}.Show();}};
+        results.MouseDoubleClick+=(_,_)=>{if(closing || closeWorkflowRunning || shutdownReady) return;if(results.SelectedItem is ListBoxItem item && item.Tag is JsonElement r) {var job=jobs.FirstOrDefault(j=>j.Id==r.Text("job"));if(job is not null)new ReviewWindow(core,job,r.Text("segment")){Owner=this}.Show();}};
         window.Show(); input.Focus();
     }
     private async void OnPreflight(object sender,RoutedEventArgs e) { var result=await Command("preflight",ExportOptions()); if(result is JsonElement p)MessageBox.Show(this,$"Audio engine ready: {p.Bool("engineReady")}\nModel ready: {p.Bool("modelReady")}\nOne-time download: {Math.Round(double.Parse(p.Text("downloadBytes","0"))/1048576)} MB\nOutput writable: {p.Bool("outputWritable")}\nCloud processing selected: {p.Bool("cloud")}\n"+string.Join("\n",p.Get("warnings").Rows().Select(w=>w.GetString())),"Processing readiness / جاهزية المعالجة"); }
@@ -424,13 +425,58 @@ public partial class MainWindow : Window
     private void OnMediaFailed(object sender, ExceptionRoutedEventArgs e) { ShowError("Windows could not preview this file. The output remains available in its export folder."); playing = false; }
     private async void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (closing) return; e.Cancel = true;
+        if (shutdownReady) return;
+        e.Cancel = true;
+        if (closeWorkflowRunning) return;
         if (!quit && jobs.Any(job => job.Status is "running" or "queued")) {
             var answer = System.Windows.MessageBox.Show(this, "Keep your exports running in the background?\n\nYes: hide to the system tray.\nNo: quit; interrupted jobs can be retried next launch.", "Audio export in progress", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
             if (answer == MessageBoxResult.Cancel) return;
             if (answer == MessageBoxResult.Yes) { Hide(); tray.Visible = true; return; }
         }
-        closing = true; IsEnabled = false; saveTimer.Stop(); mediaTimer.Stop(); Player.Stop(); SystemEvents.UserPreferenceChanged -= OnWindowsPreference;
-        await SavePreferences(); if (bridge is not null) await bridge.DisposeAsync(); await core.DisposeAsync(); tray.Dispose(); Close();
+        closeWorkflowRunning = true;
+        var preparedReviews = new List<ReviewWindow>();
+        try {
+            IsEnabled = false;
+            var reviews = Application.Current.Windows.OfType<ReviewWindow>()
+                .Where(review => ReferenceEquals(review.Owner, this) && !review.IsClosed)
+                .ToArray();
+            foreach (var review in reviews) {
+                if (review.HasOwnerShutdownBlocker()) {
+                    review.Activate();
+                    return;
+                }
+            }
+            foreach (var review in reviews) {
+                if (review.IsClosed) continue;
+                if (!await review.PrepareForOwnerShutdownAsync()) {
+                    review.Activate();
+                    return;
+                }
+                if (!review.IsClosed) preparedReviews.Add(review);
+            }
+            foreach (var review in preparedReviews) {
+                if (!review.CloseForOwnerShutdown()) {
+                    review.Activate();
+                    return;
+                }
+            }
+
+            closing = true;
+            IsEnabled = false; saveTimer.Stop(); mediaTimer.Stop(); Player.Stop(); SystemEvents.UserPreferenceChanged -= OnWindowsPreference;
+            await SavePreferences(); if (bridge is not null) await bridge.DisposeAsync(); await core.DisposeAsync();
+            shutdownReady = true;
+            tray.Dispose();
+            Close();
+        } catch (Exception error) {
+            IsEnabled = true;
+            ShowError("Notakillite could not finish closing. " + error.Message);
+        } finally {
+            if (!shutdownReady) {
+                foreach (var review in preparedReviews) review.ReleaseOwnerShutdown();
+                IsEnabled = true;
+                closing = false;
+                closeWorkflowRunning = false;
+            }
+        }
     }
 }

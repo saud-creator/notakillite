@@ -25,7 +25,7 @@ const terminal = ['done', 'needs-review', 'cancelled', 'error', 'interrupted', '
 const defaults = { engine: 'deepfilter', strength: 'balanced', splitMinutes: 0, audioOnly: false, search: '', folder: '', theme: 'dark', windowWidth: 1280, windowHeight: 860, selectedNote: '', expandedFolders: [], folderExpansionSaved: false, queueExpanded: false, ...TRANSCRIPT_DEFAULTS };
 export class CoreService extends EventEmitter {
   constructor({ dataRoot, connector, browserOptions, transcribe } = {}) {
-    super(); this.paths = pathsFor(dataRoot); this.modelsDir = process.env.NOTAKILLITE_MODELS_DIR || this.paths.models; this.secrets = {}; this.documentLocks = new Map(); this.options = { connector, browserOptions, transcribe }; this.connection = 'Starting'; this.detail = ''; this.revision = 0;
+    super(); this.paths = pathsFor(dataRoot); this.modelsDir = process.env.NOTAKILLITE_MODELS_DIR || this.paths.models; this.secrets = {}; this.documentLocks = new Map(); this.options = { connector, browserOptions, transcribe }; this.connection = 'Starting'; this.detail = ''; this.revision = 0; this.reviewRetryJobId = null;
   }
   async init() {
     await preparePaths(this.paths);
@@ -268,11 +268,11 @@ export class CoreService extends EventEmitter {
         const cleanup = `${ENGINE_NAMES[job.options.engine]}${fromOriginal && job.options.engine !== 'none' ? ' (transcribed from the original audio)' : ''}`;
         const markdown = lectureMarkdown({ title: job.title, recording: job.recordingName, sourceFile, duration: result.duration, cleanup, transcript: result, includePrompt: job.options.aiPrompt, number: batch ? job.order : undefined, total: batch ? job.batchSize : undefined, quality: result.quality });
         await writeFile(path.join(staging, 'transcript.md'), markdown, 'utf8');
-        const document = newDocument(result, { title: job.title, course: job.course, pdfs: context.sources || [], contextWarnings: context.warnings || [], suggestedTerms:context.glossary || [], pdfAssistance:job.options.pdfBias?'experimental-bias':'review-suggestions', engine: result.engine, model: result.model, resources: result.resources });
+        const document = newDocument(result, { title: job.title, course: job.course, pdfs: context.sources || [], contextWarnings: context.warnings || [], suggestedTerms:context.glossary || [], pdfAssistance:job.options.pdfBias?'experimental-bias':'review-suggestions', engine: result.engine, model: result.model, backendName:result.backendName, deviceName:result.deviceName, resources: result.resources });
         document.rawSegments = result.rawSegments || result.segments;
         await atomicJson(path.join(this.paths.data, 'transcripts', `${job.id}.json`), document);
         this.store.indexTranscript(job.id, document);
-        transcript = { engine: result.engine, model: result.model, device: result.device, language: result.language, words: wordCount(result.segments), seconds: result.duration,
+        transcript = { engine: result.engine, model: result.model, device: result.device, backendName:result.backendName, deviceName:result.deviceName, language: result.language, words: wordCount(result.segments), seconds: result.duration,
           quality: result.quality.status, qualityLabel: qualityLabel(result.quality), repaired: result.quality.repairs.length, unresolved: result.quality.unresolved.map(u => ({ start: u.start, end: u.end, reasons: u.reasons })) };
         manifest.transcript = { file: 'transcript.md', ...transcript };
         await writeFile(path.join(staging, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -386,13 +386,19 @@ export class CoreService extends EventEmitter {
         const text = await renderPdfPage(data.file, Number(data.page), target); return { path:target, text };
       }
       case 'retryPassage': {
-        const job = this.jobs.find(j => j.id === data.id), doc = await this.transcript(data.id);
-        if (data.revision !== doc.revision) throw new Error('Transcript changed. Reload before retry.');
-        const segment = doc.segments.find(s => s.id === data.segmentId); if(!segment) throw new Error('Segment not found.');
+        const job = this.jobs.find(j => j.id === data.id);
+        if (!job) throw new Error('Unknown job.');
         if(this.active || this.reviewRetry) throw new Error('Pause the processing queue before retrying a passage.');
-        this.reviewRetry = new AbortController();
-        const directory = await mkdtemp(path.join(this.paths.temp,'review-'));
+        const controller = new AbortController();
+        this.reviewRetry = controller; this.reviewRetryJobId = job.id;
+        let directory;
         try {
+          const doc = await this.transcript(data.id);
+          controller.signal.throwIfAborted();
+          if (data.revision !== doc.revision) throw new Error('Transcript changed. Reload before retry.');
+          const segment = doc.segments.find(s => s.id === data.segmentId); if(!segment) throw new Error('Segment not found.');
+          directory = await mkdtemp(path.join(this.paths.temp,'review-'));
+          controller.signal.throwIfAborted();
           // Prefer a retained/local original. Completed Notability jobs have neither, so assemble
           // their independently timestamp-reset output parts before applying global transcript times.
           let input = job.input && await exists(job.input) ? job.input : job.localFile && await exists(job.localFile) ? job.localFile : null;
@@ -400,13 +406,24 @@ export class CoreService extends EventEmitter {
             const parts = (job.files || []).filter(f => f.kind !== 'transcript');
             if(!parts.length || parts.some(f => typeof f.path !== 'string')) throw new Error('Processed audio is unavailable. Re-export the lecture before retrying a passage.');
             for(const part of parts) if(!await exists(part.path)) throw new Error('A processed audio part is unavailable. Re-export the lecture before retrying a passage.');
-            input = parts.length === 1 ? parts[0].path : (await speechWav({ ffmpeg, inputs:parts.map(f=>f.path), work:directory, signal:this.reviewRetry.signal })).wav;
+            input = parts.length === 1 ? parts[0].path : (await speechWav({ ffmpeg, inputs:parts.map(f=>f.path), work:directory, signal:controller.signal })).wav;
           }
+          controller.signal.throwIfAborted();
           const target = path.join(directory,'passage.wav');
-          await cutWav({ ffmpeg, wav:input, start:segment.start, end:Math.max(segment.start + .1, segment.end), target, signal:this.reviewRetry.signal });
-          const result = await (this.options.transcribe || transcribeAudio)({ ffmpeg,inputs:[target],work:directory,context:await readLecturePdfs(job.pdfs || [],{signal:this.reviewRetry.signal}),options:{...job.options,chunkSeconds:0,pdfBias:true},modelsDir:this.modelsDir,secrets:this.secrets,signal:this.reviewRetry.signal });
+          await cutWav({ ffmpeg, wav:input, start:segment.start, end:Math.max(segment.start + .1, segment.end), target, signal:controller.signal });
+          controller.signal.throwIfAborted();
+          const result = await (this.options.transcribe || transcribeAudio)({ ffmpeg,inputs:[target],work:directory,context:await readLecturePdfs(job.pdfs || [],{signal:controller.signal}),options:{...job.options,chunkSeconds:0,pdfBias:true},modelsDir:this.modelsDir,secrets:this.secrets,signal:controller.signal });
+          if (controller.signal.aborted) { const error = new Error('Passage retry was cancelled.'); error.name = 'AbortError'; throw error; }
           return { revision:doc.revision, segments:result.segments, quality:result.quality, candidateOnly:true };
-        } finally { this.reviewRetry = null; closeWorkers(); await rm(directory,{ recursive:true,force:true }); void this.pump(); }
+        } finally {
+          if (this.reviewRetry === controller) { this.reviewRetry = null; this.reviewRetryJobId = null; }
+          closeWorkers(); if (directory) await rm(directory,{ recursive:true,force:true }); void this.pump();
+        }
+      }
+      case 'cancelPassageRetry': {
+        if (typeof data.id !== 'string' || !this.reviewRetry || this.reviewRetryJobId !== data.id) return { cancelled:false };
+        this.reviewRetry.abort();
+        return { cancelled:true };
       }
       case 'preflight': { const profile=settings({...this.preferences,...data,clean:(data.engine || this.preferences.engine)!=='none'}); const cap=await capabilities(); const plan=resourcePlan(cap,profile,WHISPER_MODELS[profile.model].bytes); const models=await whisperStatus(this.modelsDir); const output=this.preferences.outputPath || this.paths.exports; await mkdir(output,{recursive:true}); const probe=path.join(output,`.preflight-${randomUUID()}`); await writeFile(probe,'',{flag:'wx'});await rm(probe); const disk=await statfs(output); return {resources:plan,modelReady:!!models.models[profile.model],downloadBytes:models.models[profile.model]?0:WHISPER_MODELS[profile.model].bytes,engineReady:profile.engine==='none'||!!this.engines[profile.engine],outputWritable:true,outputFreeBytes:disk.bavail*disk.bsize,cloud:profile.transcriber==='groq',warnings:plan.insufficientMemory?['Insufficient available RAM for the selected model']:[]}; }
       case 'capabilities': return { ...(await capabilities()), protocolVersion: 2 };

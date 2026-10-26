@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { APP_VERSION, EXTENSION_ID } from '../core/connector-info.mjs';
@@ -39,6 +39,23 @@ const dotnetRoot = existsSync(path.join(pinnedDotnet, 'dotnet.exe')) ? pinnedDot
 const pinned = dotnetRoot === pinnedDotnet;
 run(path.join(dotnetRoot, 'dotnet.exe'), ['publish', path.join(root, 'desktop', 'Notakillite.Desktop.csproj'), '-c', 'Release', `-p:Version=${version}`, ...(pinned ? ['--no-restore'] : []), '--nologo', '-o', stage], { DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false', ...(pinned ? { DOTNET_CLI_HOME: path.join(root, '.tools', 'dotnet-home'), NUGET_PACKAGES: path.join(root, '.tools', 'nuget') } : {}) });
 for (const name of ['core', 'companion', 'vendor', 'package.json', 'README.md', 'VERIFICATION.md']) await cp(path.join(root, name), path.join(stage, name), { recursive: true });
+const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, windowsHide: true, encoding: 'utf8' });
+const changes = spawnSync('git', ['status', '--porcelain'], { cwd: root, windowsHide: true, encoding: 'utf8' });
+// Ship the user guide; keep machine-specific engineering reports outside the payload.
+await mkdir(path.join(stage, 'docs', 'implementation'), { recursive: true });
+await cp(path.join(root, 'docs', 'implementation', 'USER-GUIDE.md'), path.join(stage, 'docs', 'implementation', 'USER-GUIDE.md'));
+const sourceRef = revision.status === 0 ? revision.stdout.trim() : 'main';
+const readme = await readFile(path.join(stage, 'README.md'), 'utf8');
+await writeFile(path.join(stage, 'README.md'), readme.replaceAll('(docs/implementation/benchmarks/RESULTS.md)', `(https://github.com/saud-creator/notakillite/blob/${sourceRef}/docs/implementation/benchmarks/RESULTS.md)`).replaceAll('(docs/implementation/VERIFICATION.md)', `(https://github.com/saud-creator/notakillite/blob/${sourceRef}/docs/implementation/VERIFICATION.md)`));
+const verification = await readFile(path.join(stage, 'VERIFICATION.md'), 'utf8');
+await writeFile(path.join(stage, 'VERIFICATION.md'), verification.replaceAll('(docs/implementation/VERIFICATION.md)', `(https://github.com/saud-creator/notakillite/blob/${sourceRef}/docs/implementation/VERIFICATION.md)`));
+await writeFile(path.join(stage, 'build-info.json'), JSON.stringify({
+  version, commit: revision.status === 0 ? revision.stdout.trim() : null,
+  dirty: changes.status === 0 ? Boolean(changes.stdout.trim()) : null,
+  builtAt: new Date().toISOString(), platform: process.platform, arch: process.arch,
+  node: process.version, whisperCommit: 'd1be6fde11ac6e0407606b4e42fe72d34add8037',
+  accountDataIncluded: false, whisperModelsIncluded: false,
+}, null, 2));
 await cp(path.join(root, 'brave-connector'), path.join(stage, 'brave-connector'), { recursive: true });
 await cp(path.join(root, 'core', 'notability-adapter.js'), path.join(stage, 'brave-connector', 'adapter.js'));
 run('C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe', ['/nologo', '/target:exe', '/platform:x64', '/optimize+', `/out:${path.join(stage, 'Notakillite.NativeHost.exe')}`, path.join(root, 'scripts', 'NativeMessagingHost.cs')]);

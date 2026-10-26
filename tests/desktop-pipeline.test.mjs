@@ -58,8 +58,8 @@ test('short bad intervals no longer require retrying five minutes',()=>{
 });
 test('chunk checkpoints resume without decoding and invalidate on settings change',async t=>{
   const d=await temp(t), wav=path.join(d,'source.wav'); await writeFile(wav,'source'); let calls=0;
-  const args={wav,duration:120,work:d,options:{chunkSeconds:60,language:'en'},resource:{workers:2,threads:1},cut:async()=>{},decode:async()=>{calls++; return {segments:[{start:3,end:4,text:'spoken words'}],settings:{}};}};
-  const a=await transcribeChunks(args); const b=await transcribeChunks(args); assert.equal(calls,2); assert.deepEqual(a.segments,b.segments);
+  const args={wav,duration:120,work:d,options:{chunkSeconds:60,language:'en'},resource:{workers:2,threads:1},cut:async()=>{},decode:async()=>{calls++; return {segments:[{start:3,end:4,text:'spoken words'}],settings:{},backendName:'Vulkan1',deviceName:'NVIDIA MX350'};}};
+  const a=await transcribeChunks(args); const b=await transcribeChunks(args); assert.equal(calls,2); assert.deepEqual(a.segments,b.segments); assert.equal(b.backendName,'Vulkan1'); assert.equal(b.deviceName,'NVIDIA MX350');
   await transcribeChunks({...args,options:{...args.options,language:'ar'}}); assert.equal(calls,4);
 });
 test('PDF retrieval preserves page provenance and irrelevant PDFs produce no context',()=>{

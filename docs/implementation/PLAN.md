@@ -18,6 +18,10 @@ A second observed M5 issue left the review label at `unreviewed` after a success
 
 Passage retry now joins processed split files before applying global transcript timestamps when a retained/local original is unavailable. Regression coverage verifies a cross-file passage, a passage wholly in part two, original-source preference, stale revisions and a missing part without transcript mutation; the related Windows suite passed 25/25. ASR still receives only the selected interval; assembling processed parts can require decoding the full recording first.
 
+Windows native follow-up: real retained-worker tests now exercise VAD off/on, actual GPU selection and bounded cancellation. The current GPU smoke selected NVIDIA MX350 (`Vulkan1`); earlier `Vulkan0` measurements used Intel UHD 750. The CLI UTF-8 manifest passes Arabic/Japanese model, input and output paths. CI builds pinned CPU and Vulkan bundles and tests the standalone selection policy. Actual VAD state/device names are retained in diagnostics and checkpoint version 3.
+
+Windows review durability follow-up: pending edits/history mutations now participate in serialized save and owner-close barriers; failed saves retain text, newer edits are saved after the pending request, selection tokens prevent stale navigation, and passage retries have job-scoped cancellation registered before asynchronous validation. These paths require rebuilt-window interaction/fault testing in addition to compiler and core regressions. The package now contains the user guide and an embedded source/runtime receipt, with verification links pointing to that source revision.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |
