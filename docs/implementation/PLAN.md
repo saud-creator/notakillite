@@ -12,6 +12,8 @@ Windows M2 follow-up: execution planning now reflects the single synchronous per
 
 Windows M4 follow-up: direct testing of the CI Vulkan worker exposed missing dynamic backend initialization (`devices=0`, `backends=0`, assertion before inference), which CLI fallback could hide. The wrapper now loads pinned ggml backends before model initialization. Actual direct GPU-required and dynamic CPU worker checks passed on this PC, including model retention/cancellation. CI now requires a direct CPU worker check using its dynamic Vulkan bundle; this is distinct from packaged CLI success. Final committed-source GPU timing and broader device/failure coverage remain open.
 
+Windows M5 follow-up: actual review-window interaction exposed selected source/PDF values rendered as record details instead of labels. The shared ComboBox selection template now honors the item template selector/string format; review selectors have bounded widths and seven controls have bilingual accessibility names. SDK build passed with zero warnings/errors; final package interaction recheck follows. A real synthetic-job edit autosaved as revision 2 with history and raw text retained.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |

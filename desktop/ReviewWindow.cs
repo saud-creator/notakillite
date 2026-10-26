@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -20,8 +21,8 @@ public sealed class ReviewWindow : Window
     private bool updatingTimeline; private int audioGeneration; private double audioOffset;
     private readonly MediaElement player = new() { LoadedBehavior = MediaState.Manual, Height = 0 };
     private readonly ComboBox format = new() { ItemsSource = new[] { "txt", "md", "srt", "vtt", "json" }, SelectedIndex = 0, Width = 75 };
-    private readonly ComboBox source = new() { DisplayMemberPath = "Name", MinWidth = 140 };
-    private readonly ComboBox pdfPages = new() { DisplayMemberPath = "Name", MinWidth = 150 };
+    private readonly ComboBox source = new() { DisplayMemberPath = "Name", Width = 200 };
+    private readonly ComboBox pdfPages = new() { DisplayMemberPath = "Name", Width = 230 };
     private readonly Image pdf = new() { Stretch = Stretch.Uniform };
     private readonly TextBlock pdfText = new() { TextWrapping = TextWrapping.Wrap };
     private bool dirty, loading, candidate, retryPending;
@@ -35,12 +36,18 @@ public sealed class ReviewWindow : Window
     {
         core = client; job = model; initialSegment=segmentId; Title = "Review lecture / مراجعة المحاضرة — " + job.Title; Width = 1100; Height = 760; MinWidth = 680; MinHeight = 480;
         SetResourceReference(BackgroundProperty, "BackgroundBrush"); SetResourceReference(ForegroundProperty, "TextBrush");
+        AutomationProperties.SetName(source, "Audio source / مصدر الصوت");
+        AutomationProperties.SetName(format, "Export format / صيغة التصدير");
+        AutomationProperties.SetName(pdfPages, "PDF page / صفحة PDF");
+        AutomationProperties.SetName(timeline, "Audio timeline / المخطط الزمني للصوت");
+        AutomationProperties.SetName(editor, "Transcript editor / محرر النص");
+        AutomationProperties.SetName(segments, "Transcript segments / مقاطع النص");
         var root = new DockPanel { Margin = new Thickness(14) }; Content = root;
         var tools = new WrapPanel(); DockPanel.SetDock(tools, Dock.Top); root.Children.Add(tools);
         void Button(string label, RoutedEventHandler action) { var b = new Button { Content = label, Margin = new Thickness(3), Padding = new Thickness(8,5,8,5) }; b.Click += action; tools.Children.Add(b); }
         Button("Play / تشغيل", (_,_) => player.Play()); Button("Pause / إيقاف", (_,_) => player.Pause());
         Button("−10s", (_,_) => player.Position = TimeSpan.FromSeconds(Math.Max(0,player.Position.TotalSeconds-10))); Button("+10s", (_,_) => player.Position += TimeSpan.FromSeconds(10));
-        var speed = new ComboBox { ItemsSource = new double[] { .75, 1, 1.25, 1.5, 2 }, SelectedIndex = 1, Width = 65 }; speed.SelectionChanged += (_,_) => player.SpeedRatio = (double)speed.SelectedItem; tools.Children.Add(speed);
+        var speed = new ComboBox { ItemsSource = new double[] { .75, 1, 1.25, 1.5, 2 }, SelectedIndex = 1, Width = 65 }; AutomationProperties.SetName(speed, "Playback speed / سرعة التشغيل"); speed.SelectionChanged += (_,_) => player.SpeedRatio = (double)speed.SelectedItem; tools.Children.Add(speed);
         tools.Children.Add(source); source.SelectionChanged += async (_,_) => { if(source.SelectedItem is AudioSource audio) { var position=player.Position.TotalSeconds+audioOffset; audioOffset=audio.Offset; player.Source=new Uri(audio.Path); player.Position=TimeSpan.FromSeconds(Math.Max(0,position-audioOffset)); var generation=++audioGeneration; try { var data=await core.Request("waveform",new {id=job.Id,fileName=Path.GetFileName(audio.Path),source=audio.Name.StartsWith("Original")?"original":"cleaned"}); if(generation==audioGeneration) DrawWaveform(data); } catch(Exception e) {status.Text=e.Message;} } };
         Button("History / السجل", (_,_) => ShowHistory()); Button("Save / حفظ", async (_,_) => { candidate=false; await Save(); }); Button("PDF terms / مصطلحات PDF", (_,_) => MessageBox.Show(this,string.Join(", ",document.Get("metadata").Get("suggestedTerms").Rows().Select(t=>t.Text("term"))),"Suggested vocabulary — review required")); Button("Discard candidate", (_,_) => { candidate=false; dirty=false; loading=true; editor.Text=current?.Text ?? ""; loading=false; }); Button("Retry passage / إعادة المقطع", async (_,_) => await Retry());
         tools.Children.Add(format); Button("Export / تصدير", async (_,_) => { try { if(candidate) { status.Text="Save or discard the candidate before export."; return; } await Save(); if(dirty) return; var result=await core.Request("exportTranscript",new { id=job.Id,format=format.SelectedItem?.ToString() }); status.Text=result.Text("path"); } catch(Exception e) { status.Text=e.Message; } });

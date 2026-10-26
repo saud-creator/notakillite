@@ -16,7 +16,7 @@
 | PDF vocabulary bias | Experimental opt-in after measured accuracy regression; reviewed passage candidates available |
 | Review/edit/export | New player/text/PDF window; autosave, raw text/history, undo/redo and manual candidate acceptance; TXT/MD/SRT/VTT/JSON; final merged recovery findings also receive timed review markers |
 | Course glossary and transcript search | Added local dictionaries and timestamped FTS search |
-| Language/accessibility | New controls bilingual; existing RTL behavior retained; complete resource-based localization and Narrator QA remain pending |
+| Language/accessibility | New controls bilingual; named review selectors/editor/timeline/list and corrected selected-item labels; existing RTL behavior retained; complete resource-based localization and Narrator QA remain pending |
 | Performance and accuracy | Offline runner, public pinned corpus importer, strict/normalized WER/CER and recorded short-clip experiments |
 | Packaging | Native worker build, PDF/native canvas payload, actual packaged ASR smoke and CI package gate; Windows local-only launcher forwarding/cache repair now tested; full current payload verification tracked separately |
 | Study generation/translation/diarization/multi-GPU | Intentionally deferred after core acceptance |
