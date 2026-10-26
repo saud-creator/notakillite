@@ -1,0 +1,1432 @@
+{
+  "schemaVersion": 1,
+  "commit": "394f179b4d30558288891b6b3c2ce7151faa8a17",
+  "dirty": false,
+  "capabilities": {
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "11th Gen Intel(R) Core(TM) i7-11700T @ 1.40GHz",
+    "gpus": [
+      {
+        "name": "NVIDIA GeForce MX350",
+        "driver": "581.63",
+        "dedicated": true,
+        "totalBytes": 4294967296,
+        "availableBytes": 4203741184,
+        "source": "nvidia-smi"
+      }
+    ],
+    "logical": 16,
+    "effective": 16,
+    "total": 16863838208,
+    "available": 6892392448
+  },
+  "node": "v24.20.0",
+  "platform": "10.0.26300",
+  "startedAt": "2026-10-26T14:25:55.322Z",
+  "runs": [
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 0,
+      "seconds": 17.6212938,
+      "duration": 10.56,
+      "rtf": 1.6686831249999998,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 5,
+          "referenceWords": 19,
+          "wer": 0.2631578947368421,
+          "charErrors": 7,
+          "referenceChars": 102,
+          "cer": 0.06862745098039216
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 19,
+          "wer": 0.10526315789473684,
+          "charErrors": 4,
+          "referenceChars": 99,
+          "cer": 0.04040404040404041
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 70.90160000000003
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 166.5209000000001
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3544065638.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 168.04330000000004
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13776,
+            "workerPeakRssBytes": 1326088192
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 17617.337199999998
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 18,
+          "findings": [],
+          "elapsedMs": 17620.4809
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 17,
+          "elapsedMs": 17621.146399999998
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 1,
+      "seconds": 14.201514500000002,
+      "duration": 10.56,
+      "rtf": 1.344840388257576,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 5,
+          "referenceWords": 19,
+          "wer": 0.2631578947368421,
+          "charErrors": 7,
+          "referenceChars": 102,
+          "cer": 0.06862745098039216
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 19,
+          "wer": 0.10526315789473684,
+          "charErrors": 4,
+          "referenceChars": 99,
+          "cer": 0.04040404040404041
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 64.65940000000046
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 267.4467000000004
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3546482278.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 268.7561999999998
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 12031,
+            "workerPeakRssBytes": 1286631424
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14200.355900000002
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 18,
+          "findings": [],
+          "elapsedMs": 14200.6508
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 17,
+          "elapsedMs": 14201.4955
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 2,
+      "seconds": 14.326950699999998,
+      "duration": 10.56,
+      "rtf": 1.3567188162878785,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 5,
+          "referenceWords": 19,
+          "wer": 0.2631578947368421,
+          "charErrors": 7,
+          "referenceChars": 102,
+          "cer": 0.06862745098039216
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 19,
+          "wer": 0.10526315789473684,
+          "charErrors": 4,
+          "referenceChars": 99,
+          "cer": 0.04040404040404041
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 59.80349999999817
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 242.78949999999895
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3560662630.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 244.24309999999969
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 12354,
+            "workerPeakRssBytes": 1286729728
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14325.915299999997
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 18,
+          "findings": [],
+          "elapsedMs": 14326.397199999996
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 17,
+          "elapsedMs": 14326.9287
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 0,
+      "seconds": 14.539971700000002,
+      "duration": 8.76,
+      "rtf": 1.6598141210045665,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 4,
+          "referenceWords": 21,
+          "wer": 0.19047619047619047,
+          "charErrors": 7,
+          "referenceChars": 112,
+          "cer": 0.0625
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 75.4369000000006
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 285.15490000000136
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3730843238.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 286.0005000000019
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 12575,
+            "workerPeakRssBytes": 1286475776
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14539.066100000004
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 14539.670100000003
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 14539.939899999998
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 1,
+      "seconds": 14.106889000000002,
+      "duration": 8.76,
+      "rtf": 1.610375456621005,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 4,
+          "referenceWords": 21,
+          "wer": 0.19047619047619047,
+          "charErrors": 7,
+          "referenceChars": 112,
+          "cer": 0.0625
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 60.64440000000468
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 266.0207999999984
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3619911270.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 267.0457999999999
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 12193,
+            "workerPeakRssBytes": 1286418432
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14106.432099999998
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 14106.639499999997
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 14106.874000000003
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 2,
+      "seconds": 14.402116899999994,
+      "duration": 8.76,
+      "rtf": 1.6440772716894971,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 4,
+          "referenceWords": 21,
+          "wer": 0.19047619047619047,
+          "charErrors": 7,
+          "referenceChars": 112,
+          "cer": 0.0625
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 59.335900000005495
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 282.3338999999978
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3597100646.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 283.4456000000064
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 12508,
+            "workerPeakRssBytes": 1286447104
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14401.083599999998
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 14401.838000000003
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 14402.095400000006
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1993",
+      "sourceHash": "40d979a6239fc08951f387c671fb5fc46fffdc5df823ed1dbdb809bc75e26620",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 0,
+      "seconds": 15.48894709999999,
+      "duration": 8.16,
+      "rtf": 1.8981552818627438,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 2,
+          "referenceWords": 15,
+          "wer": 0.13333333333333333,
+          "charErrors": 4,
+          "referenceChars": 101,
+          "cer": 0.039603960396039604
+        },
+        "normalized": {
+          "wordErrors": 1,
+          "referenceWords": 15,
+          "wer": 0.06666666666666667,
+          "charErrors": 1,
+          "referenceChars": 98,
+          "cer": 0.01020408163265306
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 79.47890000000189
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -54.83564,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.16,
+              "hash": "c1524c77a3444b34"
+            }
+          ],
+          "elapsedMs": 324.27880000000005
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3699017318.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 325.94719999999506
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13795,
+            "workerPeakRssBytes": 1317429248
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 15487.295199999993
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 15,
+          "findings": [],
+          "elapsedMs": 15488.520499999999
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 15,
+          "elapsedMs": 15488.930299999993
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1993",
+      "sourceHash": "40d979a6239fc08951f387c671fb5fc46fffdc5df823ed1dbdb809bc75e26620",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 1,
+      "seconds": 14.996482900000002,
+      "duration": 8.16,
+      "rtf": 1.8378042769607845,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 2,
+          "referenceWords": 15,
+          "wer": 0.13333333333333333,
+          "charErrors": 4,
+          "referenceChars": 101,
+          "cer": 0.039603960396039604
+        },
+        "normalized": {
+          "wordErrors": 1,
+          "referenceWords": 15,
+          "wer": 0.06666666666666667,
+          "charErrors": 1,
+          "referenceChars": 98,
+          "cer": 0.01020408163265306
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 200.5054000000091
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -54.83564,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.16,
+              "hash": "c1524c77a3444b34"
+            }
+          ],
+          "elapsedMs": 296.48730000000796
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3608893030.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 297.3497000000061
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13170,
+            "workerPeakRssBytes": 1292898304
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 14995.669300000009
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 15,
+          "findings": [],
+          "elapsedMs": 14996.02410000001
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 15,
+          "elapsedMs": 14996.414700000008
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1993",
+      "sourceHash": "40d979a6239fc08951f387c671fb5fc46fffdc5df823ed1dbdb809bc75e26620",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 2,
+      "seconds": 15.302876000000003,
+      "duration": 8.16,
+      "rtf": 1.8753524509803925,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 2,
+          "referenceWords": 15,
+          "wer": 0.13333333333333333,
+          "charErrors": 4,
+          "referenceChars": 101,
+          "cer": 0.039603960396039604
+        },
+        "normalized": {
+          "wordErrors": 1,
+          "referenceWords": 15,
+          "wer": 0.06666666666666667,
+          "charErrors": 1,
+          "referenceChars": 98,
+          "cer": 0.01020408163265306
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 59.7783999999956
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -54.83564,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.16,
+              "hash": "c1524c77a3444b34"
+            }
+          ],
+          "elapsedMs": 267.7173999999941
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3615307366.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 268.6837999999989
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13770,
+            "workerPeakRssBytes": 1292845056
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 15301.733099999998
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 15,
+          "findings": [],
+          "elapsedMs": 15302.309800000003
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 15,
+          "elapsedMs": 15302.843399999998
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1730",
+      "sourceHash": "318e95704f15e5050d5f3703172415c5e9d7f83495c3589590e8c4ca8b2628f6",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 0,
+      "seconds": 16.164267499999987,
+      "duration": 14.16,
+      "rtf": 1.1415443149717506,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 8,
+          "referenceWords": 27,
+          "wer": 0.2962962962962963,
+          "charErrors": 16,
+          "referenceChars": 160,
+          "cer": 0.1
+        },
+        "normalized": {
+          "wordErrors": 7,
+          "referenceWords": 30,
+          "wer": 0.23333333333333334,
+          "charErrors": 12,
+          "referenceChars": 157,
+          "cer": 0.07643312101910828
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 14.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 73.81479999999283
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -41.128352,
+          "speechSeconds": 13,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 14.16,
+              "hash": "dbda51da9b00928f"
+            }
+          ],
+          "elapsedMs": 338.2884999999951
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3588798054.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 339.300900000002
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 14427,
+            "workerPeakRssBytes": 1293688832
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 16162.61970000001
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 28,
+          "findings": [],
+          "elapsedMs": 16163.249699999986
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 28,
+          "elapsedMs": 16164.25020000001
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1730",
+      "sourceHash": "318e95704f15e5050d5f3703172415c5e9d7f83495c3589590e8c4ca8b2628f6",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 1,
+      "seconds": 15.54274470000001,
+      "duration": 14.16,
+      "rtf": 1.0976514618644075,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 8,
+          "referenceWords": 27,
+          "wer": 0.2962962962962963,
+          "charErrors": 16,
+          "referenceChars": 160,
+          "cer": 0.1
+        },
+        "normalized": {
+          "wordErrors": 7,
+          "referenceWords": 30,
+          "wer": 0.23333333333333334,
+          "charErrors": 12,
+          "referenceChars": 157,
+          "cer": 0.07643312101910828
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 14.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 69.12189999999828
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -41.128352,
+          "speechSeconds": 13,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 14.16,
+              "hash": "dbda51da9b00928f"
+            }
+          ],
+          "elapsedMs": 300.1580000000249
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3579385446.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 301.1160000000091
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13839,
+            "workerPeakRssBytes": 1293545472
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 15541.639000000025
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 28,
+          "findings": [],
+          "elapsedMs": 15542.10580000002
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 28,
+          "elapsedMs": 15542.732700000022
+        }
+      ]
+    },
+    {
+      "fixture": "ar_eg-1730",
+      "sourceHash": "318e95704f15e5050d5f3703172415c5e9d7f83495c3589590e8c4ca8b2628f6",
+      "profile": "turbo-persistent-vulkan",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "vulkan"
+      },
+      "repeat": 2,
+      "seconds": 15.101636200000009,
+      "duration": 14.16,
+      "rtf": 1.0664997316384186,
+      "device": "GPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 8,
+          "referenceWords": 27,
+          "wer": 0.2962962962962963,
+          "charErrors": 16,
+          "referenceChars": 160,
+          "cer": 0.1
+        },
+        "normalized": {
+          "wordErrors": 7,
+          "referenceWords": 30,
+          "wer": 0.23333333333333334,
+          "charErrors": 12,
+          "referenceChars": 157,
+          "cer": 0.07643312101910828
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 14.16,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 61.927900000009686
+        },
+        {
+          "event": "pieces",
+          "pauses": 2,
+          "pauseThresholdDb": -41.128352,
+          "speechSeconds": 13,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 14.16,
+              "hash": "dbda51da9b00928f"
+            }
+          ],
+          "elapsedMs": 278.6224999999977
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 15,
+          "threads": 15,
+          "workers": 1,
+          "requestedWorkers": 1,
+          "workerLimit": 1,
+          "workerLimitReasons": [],
+          "executionLimit": {
+            "maxWorkers": 1,
+            "reason": "Unchunked inference runs one request at a time."
+          },
+          "memoryBudget": 3555055206.3999996,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 279.5026000000071
+        },
+        {
+          "event": "decode",
+          "nativeMetrics": {
+            "inferenceMs": 13535,
+            "workerPeakRssBytes": 1293373440
+          },
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "GPU",
+          "language": "ar",
+          "settings": {
+            "language": "ar",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 15100.770099999994
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 28,
+          "findings": [],
+          "elapsedMs": 15101.114499999996
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 28,
+          "elapsedMs": 15101.626699999993
+        }
+      ]
+    }
+  ],
+  "measurementScope": "End-to-end transcription; process-tree native RAM/VRAM and Windows UI latency require platform instrumentation.",
+  "reproductionNotes": {
+    "model": "large-v3-turbo q8_0",
+    "modelSha256": "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1",
+    "device": "Intel UHD 750 (Vulkan0 attributed by subsequent probe; no per-run device names)",
+    "threads": 15,
+    "workers": 1,
+    "pdfBias": false,
+    "scope": "Four public clips, three fresh-worker repetitions each. Not medical accuracy or a full-lecture benchmark.",
+    "binaryIdentityLimitation": "Original runner did not embed full native executable/DLL hashes; later native smoke receipts do not retroactively identify those benchmark binaries."
+  }
+}

@@ -36,7 +36,10 @@ public sealed class ReviewWindow : Window
     public bool IsClosed { get; private set; }
     private Row? current; private readonly string? initialSegment;
     private readonly DispatcherTimer autosave = new() { Interval = TimeSpan.FromSeconds(2) };
-    private sealed record Row(string Id, string Label, double Start, double End, string Text);
+    private sealed record Row(string Id, string Label, double Start, double End, string Text)
+    {
+        public override string ToString() => Label;
+    }
     private sealed record AudioSource(string Name, string Path, double Offset=0);
     private sealed record PdfPage(string Name, string File, int Page);
     public ReviewWindow(CoreClient client, JobModel model, string? segmentId=null)

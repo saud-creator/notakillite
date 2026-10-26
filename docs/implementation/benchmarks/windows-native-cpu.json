@@ -1,0 +1,77 @@
+{
+  "commit": "e13a02b8f41b2756761776c46f01487965b68b80",
+  "dirty": false,
+  "platform": "win32",
+  "os": "10.0.26300",
+  "node": "v24.20.0",
+  "workerSha256": "679ace05f9f6ab64e7ad41c2276be5213ecc6aecf45b2354b2cbe0bf279c5581",
+  "modelSha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+  "backend": "cpu",
+  "backendEvidence": [
+    "whisper_backend_init_gpu: no GPU found"
+  ],
+  "runs": [
+    {
+      "repeat": 0,
+      "wallMs": 969.8222,
+      "device": "CPU",
+      "backendName": "CPU",
+      "deviceName": "11th Gen Intel(R) Core(TM) i7-11700T @ 1.40GHz",
+      "segments": 2,
+      "promptTokens": 4,
+      "inferenceMs": 969,
+      "workerPeakRssBytes": 176087040
+    },
+    {
+      "repeat": 1,
+      "wallMs": 1155.9487000000001,
+      "device": "CPU",
+      "backendName": "CPU",
+      "deviceName": "11th Gen Intel(R) Core(TM) i7-11700T @ 1.40GHz",
+      "segments": 2,
+      "promptTokens": 4,
+      "inferenceMs": 1155,
+      "workerPeakRssBytes": 178712576
+    }
+  ],
+  "measurementScope": "Native worker peak working set only; excludes the rest of the application.",
+  "libraries": [
+    {
+      "name": "ggml-base.dll",
+      "sha256": "b3d105c7531f2acdfb81c74f9d1f999a655203025c522e96deea3f8119d704c3"
+    },
+    {
+      "name": "ggml-cpu.dll",
+      "sha256": "41f2b3cba6d049b166006f507498e295c4d0032d759460698c9b07c8847d1742"
+    },
+    {
+      "name": "ggml.dll",
+      "sha256": "5b248029db633ccaafb3c68180d4c7e58cd8e2ccaa3768e48e64d3c705a122a7"
+    },
+    {
+      "name": "whisper.dll",
+      "sha256": "faee7fa283339d524ad7812e1ebead973a9588e1a08d3c2f3092814cc40c6e70"
+    }
+  ],
+  "coldLoadAndTokenizeMs": 339.42859999999996,
+  "vadToggle": {
+    "result": "passed",
+    "off": {
+      "applied": false,
+      "vadSegments": 0,
+      "decodedSegments": 2
+    },
+    "on": {
+      "applied": true,
+      "vadSegments": 2,
+      "decodedSegments": 2
+    }
+  },
+  "cancellationMs": 23.445800000000418,
+  "result": "passed",
+  "unicodePaths": "passed",
+  "retainedModel": "passed",
+  "tokenizerBudget": "passed",
+  "cancellationAndRestart": "passed",
+  "cacheAndLoadNotes": "Clean committed source; warmed driver shader cache. Package publication was running concurrently; these are acceptance observations, not controlled throughput comparisons."
+}
