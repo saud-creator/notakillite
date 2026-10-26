@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
 import os from 'node:os';
-import { resourcePlan, boundedMap, capabilities } from '../core/resource-policy.mjs';
+import { resourcePlan, inferenceExecutionLimit, boundedMap, capabilities } from '../core/resource-policy.mjs';
 import { claimDirectory, atomicJson, loadCheckpoint } from '../core/artifacts.mjs';
 import { newDocument, editDocument, exportDocument } from '../core/transcript-document.mjs';
 import { chunkWindows, recoveryWindows, transcribeChunks } from '../companion/chunk-pipeline.mjs';
@@ -18,6 +18,26 @@ test('resource budgets never oversubscribe effective CPUs and respect memory cap
   const cap={ effective:12,total:16*1024**3,available:12*1024**3 };
   for(const policy of ['auto','background','maximum']) { const p=resourcePlan(cap,{resourcePolicy:policy,workers:16,threads:100}); assert.ok(p.workers*p.threads<=12); assert.ok(p.memoryBudget<=cap.available); }
   const detected=await capabilities(); assert.ok(detected.effective>=1); assert.ok(resourcePlan({...cap,effective:1}).threads===1);
+});
+test('serial execution caps preserve the requested worker count and return its limiting reason', () => {
+  const cap={effective:12,total:16*1024**3,available:12*1024**3}, options={resourcePolicy:'maximum',workers:4,threads:0};
+  const limit=inferenceExecutionLimit({chunked:true,persistentWorkerAvailable:true,availableChunks:8});
+  const plan=resourcePlan(cap,options,874188075,limit);
+  assert.equal(plan.workers,1); assert.equal(plan.requestedWorkers,4); assert.equal(plan.threads,plan.cpuBudget);
+  assert.equal(plan.workerLimit,1); assert.match(plan.workerLimitReasons.join(' '),/persistent native worker/i);
+});
+test('CLI concurrency is capped by chunks while unchunked inference uses its full thread budget', async () => {
+  const cap={effective:12,total:16*1024**3,available:12*1024**3}, options={resourcePolicy:'maximum',workers:8,threads:0};
+  const plan=resourcePlan(cap,options,874188075,inferenceExecutionLimit({chunked:true,persistentWorkerAvailable:false,availableChunks:2}));
+  assert.equal(plan.workers,2); assert.equal(plan.requestedWorkers,8); assert.equal(plan.threads,6);
+  assert.match(plan.workerLimitReasons.join(' '),/2 available chunks/i);
+  let active=0,peak=0;
+  await boundedMap([0,1,2],plan.workers,async()=>{peak=Math.max(peak,++active);await new Promise(r=>setTimeout(r,6));active--;});
+  assert.equal(peak,2);
+  const unchunked=inferenceExecutionLimit({chunked:false,persistentWorkerAvailable:false,availableChunks:2});
+  const single=resourcePlan(cap,options,874188075,unchunked);
+  assert.equal(single.workers,1); assert.equal(single.threads,single.cpuBudget);
+  assert.match(single.workerLimitReasons.join(' '),/unchunked/i);
 });
 test('bounded concurrency preserves output order and aborts new work', async () => {
   let active=0,peak=0; const result=await boundedMap([1,2,3,4],2,async n=>{ peak=Math.max(peak,++active); await new Promise(r=>setTimeout(r,6-n)); active--; return n; });
@@ -138,6 +158,8 @@ test('PDF vocabulary is review-only by default and automatic bias requires expli
   const ffmpeg=(await import('ffmpeg-static')).default,d=await temp(t),calls=[];
   const context=contextIndex([{page:1,file:'wrong.pdf',text:'Anatomy caput medusae portal hypertension'}]);
   const runner=async args=>{calls.push(args);await writeFile(args[args.indexOf('-of')+1]+'.json',JSON.stringify({result:{language:'en'},transcription:[{offsets:{from:0,to:3000},text:'The anterior abdominal wall has several layers.'}]}));return {code:0,stderr:'',build:'cpu'};};
-  for(const pdfBias of [false,true]){const work=path.join(d,String(pdfBias));await mkdir(work);await transcribeAudio({ffmpeg,inputs:[(await import('node:url')).fileURLToPath(new URL('./fixtures/spoken-lecture.wav',import.meta.url))],work,context,options:{model:'tiny',language:'en',chunkSeconds:0,transcriber:'local',pdfBias},runner,modelResolver:async()=>'/mock-model',modelsDir:d});}
+  const results=[];
+  for(const pdfBias of [false,true]){const work=path.join(d,String(pdfBias));await mkdir(work);results.push(await transcribeAudio({ffmpeg,inputs:[(await import('node:url')).fileURLToPath(new URL('./fixtures/spoken-lecture.wav',import.meta.url))],work,context,options:{model:'tiny',language:'en',chunkSeconds:0,transcriber:'local',pdfBias,resourcePolicy:'maximum',workers:4,threads:0},runner,modelResolver:async()=>'/mock-model',modelsDir:d}));}
   assert.ok(!calls[0].includes('--prompt'));assert.ok(calls[1].includes('--prompt'));
+  for(const result of results){assert.equal(result.resources.requestedWorkers,4);assert.equal(result.resources.workers,1);assert.equal(result.resources.threads,result.resources.cpuBudget);assert.match(result.resources.workerLimitReasons.join(' '),/unchunked/i);}
 });

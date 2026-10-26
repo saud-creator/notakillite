@@ -3,8 +3,8 @@
 // Background: docs/transcription-reliability.md (P0 repetition-loop incident).
 import path from 'node:path';
 import { hasPersistentWorker } from './persistent-whisper.mjs';
-import { capabilities, resourcePlan } from '../core/resource-policy.mjs';
-import { transcribeChunks, recoveryWindows } from './chunk-pipeline.mjs';
+import { capabilities, resourcePlan, inferenceExecutionLimit } from '../core/resource-policy.mjs';
+import { transcribeChunks, recoveryWindows, chunkWindows } from './chunk-pipeline.mjs';
 import { retrieveContext } from './lecture-context.mjs';
 import { createHash } from 'node:crypto';
 import { open, writeFile, rm, stat } from 'node:fs/promises';
@@ -126,10 +126,14 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
   const initialContext=options.pdfBias ? retrieveContext(context,'') : {vocabulary:''};
   const vocabulary=[options.vocabulary,initialContext.vocabulary].filter(Boolean).join(', ').slice(0,600);
   const common = { ffmpeg, wav, duration, model: options.model, language: options.language, vocabulary, work, signal, runTool, fetchImpl, modelResolver };
-  const resource = resourcePlan(await capabilities(), options, WHISPER_MODELS[options.model]?.bytes);
+  const chunked = !groq && options.chunkSeconds !== 0 && duration > (options.chunkSeconds || 60);
+  const persistentWorkerAvailable = chunked && !runner && await hasPersistentWorker(options.backend);
+  const availableChunks = chunked ? chunkWindows(duration, silences, options.chunkSeconds || 60).length : 1;
+  const executionLimit = inferenceExecutionLimit({ chunked, persistentWorkerAvailable, availableChunks });
+  const resource = resourcePlan(await capabilities(), options, WHISPER_MODELS[options.model]?.bytes, executionLimit);
   log({ event: 'resources', ...resource });
   if (resource.insufficientMemory && !runner) throw new Error('Not enough available RAM for the selected model. Free memory or explicitly choose a smaller model.');
-  const first = !groq && options.chunkSeconds !== 0 && duration > (options.chunkSeconds || 60)
+  const first = chunked
     ? await transcribeChunks({ wav, duration, silences, work, checkpointDir, options, resource, context, signal, log,
       cut: (target, start, end) => cutWav({ ffmpeg, wav, start, end, target, signal }),
       decode: (file, seconds, opts, index) => transcribeLocal({ ...common, wav: file, duration: seconds, modelsDir, work, threads: opts.threads, backend: opts.backend, name: `chunk-${index}`, vocabulary: opts.vocabulary, ...(runner ? { runner } : {}) }),

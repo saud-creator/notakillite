@@ -23,7 +23,13 @@ export async function capabilities() {
   }
   return { platform: process.platform, arch: process.arch, cpu: os.cpus()[0]?.model, gpus: await gpuInfo(), logical: os.cpus().length, effective, total, available };
 }
-export function resourcePlan(cap, options = {}, modelBytes = 874188075) {
+export function inferenceExecutionLimit({ chunked, persistentWorkerAvailable = false, availableChunks = 1 } = {}) {
+  if (!chunked) return { maxWorkers: 1, reason: 'Unchunked inference runs one request at a time.' };
+  if (persistentWorkerAvailable) return { maxWorkers: 1, reason: 'The persistent native worker processes requests serially.' };
+  const chunks = Math.max(1, Math.floor(Number(availableChunks) || 1));
+  return { maxWorkers: chunks, reason: `The CLI path has ${chunks} available chunks.` };
+}
+export function resourcePlan(cap, options = {}, modelBytes = 874188075, executionLimit = null) {
   const policy = options.resourcePolicy || 'auto';
   if (!['auto', 'background', 'maximum'].includes(policy)) throw new Error('Unknown resource policy.');
   const limit = policy === 'background' ? Math.max(1, Math.floor(cap.effective / 2)) : policy === 'maximum' ? cap.effective : Math.max(1, cap.effective - (cap.effective > 2 ? 1 : 0));
@@ -31,8 +37,18 @@ export function resourcePlan(cap, options = {}, modelBytes = 874188075) {
   const budget = Math.max(0, cap.available - Math.max(2 * 1024 ** 3, cap.total * .2));
   // CLI workers duplicate model/context allocations. Extra workers are explicit until benchmarked.
   const workerBytes = modelBytes * 1.5 + 512 * 1024 ** 2;
-  const workers = Math.max(1, Math.min(Number(options.workers) || 1, Math.floor(budget / workerBytes) || 1, threads));
-  return { policy, cpuBudget: threads, threads: Math.max(1, Math.floor(threads / workers)), workers, memoryBudget: budget, estimatedWorkerBytes: workerBytes, insufficientMemory: budget < workerBytes, preparedQueueLimit: workers * 2 };
+  const requestedWorkers = Math.max(1, Number(options.workers) || 1);
+  const caps = [
+    { max: threads, reason: 'CPU thread budget' },
+    { max: Math.max(1, Math.floor(budget / workerBytes) || 1), reason: 'available memory budget' },
+  ];
+  if (executionLimit?.maxWorkers !== undefined) caps.push({ max: Math.max(1, Math.floor(Number(executionLimit.maxWorkers) || 1)), reason: executionLimit.reason || 'execution path limit' });
+  const workerLimit = Math.max(1, Math.min(...caps.map(cap => cap.max)));
+  const workers = Math.max(1, Math.min(requestedWorkers, workerLimit));
+  const workerLimitReasons = requestedWorkers > workerLimit ? caps.filter(cap => cap.max === workerLimit).map(cap => cap.reason) : [];
+  return { policy, cpuBudget: threads, threads: Math.max(1, Math.floor(threads / workers)), workers, requestedWorkers, workerLimit, workerLimitReasons,
+    executionLimit: executionLimit ? { maxWorkers: executionLimit.maxWorkers, reason: executionLimit.reason } : null,
+    memoryBudget: budget, estimatedWorkerBytes: workerBytes, insufficientMemory: budget < workerBytes, preparedQueueLimit: workers * 2 };
 }
 export async function boundedMap(items, limit, fn, signal) {
   const out = new Array(items.length); let next = 0, failure;

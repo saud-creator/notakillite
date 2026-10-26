@@ -8,6 +8,8 @@ Current continuation branch: `codex/desktop-lecture-pipeline-20261026-8c9fb91`, 
 
 Windows packaging follow-up: the outer launcher now forwards explicit local-only/isolated-data options with correct Windows argument quoting and repairs cached payloads missing required files. A focused launcher test passed extraction repair, readiness/current-pointer publication, Unicode paths, real WPF capture and clean exit. The build now requires Windows x64 Node 24 before writing outputs; the full package test asserts that embedded runtime.
 
+Windows M2 follow-up: execution planning now reflects the single synchronous persistent model worker and the actual number of CLI chunks. A serial worker receives the full allowed thread budget; requested workers and limiting reasons remain in diagnostics. The complete desktop/pipeline file passed 24/24. RAM estimates/reserve and defaults were retained; calibration and process-tree supervision remain open.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |
