@@ -66,6 +66,17 @@ test('decoded text is never fed back: every Whisper run uses -mc 0 or a prompt-o
   assert.equal(vocab.quality.status, 'ok');
 });
 
+test('the local speech-detection retry toggles the CLI VAD flag from the reported initial setting', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
+  const ctx = await setup(t, 6), log = [];
+  const { runner, calls } = mockWhisper(({ duration, call }) => call === 1 ? looping(duration, 60) : normal(duration, 70 + call));
+  const result = await run(ctx, runner, { log: event => log.push(event) });
+  assert.equal(log.find(event => event.event === 'decode')?.settings.vad, true, 'CLI initial-pass settings report VAD on.');
+  assert.ok(calls[0].args.includes('--vad'), 'the initial CLI pass uses its VAD-on default.');
+  assert.ok(result.quality.attempts.some(attempt => attempt.strategy === 'voice-detection-toggled'), JSON.stringify(result.quality.attempts));
+  const toggleIndex = calls.findIndex(call => !call.args.includes('--vad'));
+  assert.ok(toggleIndex > 0, 'the VAD retry removes --vad after observing an initial VAD-on CLI pass.');
+});
+
 test('a loop in the first pass is repaired from source audio; neighbouring parts stay unchanged', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
   const ctx = await setup(t, 16);
   const log = [];

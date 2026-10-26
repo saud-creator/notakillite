@@ -47,7 +47,7 @@ export async function transcribeChunks({ wav, duration, silences, work, checkpoi
   const source = await hashFile(wav); const root = checkpointDir || path.join(work, 'checkpoints'); await mkdir(root, { recursive: true });
   let complete = 0; const started = Date.now();
   const results = await boundedMap(chunks, resource.workers, async chunk => {
-    const key = fingerprint({ version: 2, whisperCommit:'d1be6fde11ac6e0407606b4e42fe72d34add8037', source, chunk, options, context: context?.sources, glossary: context?.glossary });
+    const key = fingerprint({ version: 3, whisperCommit:'d1be6fde11ac6e0407606b4e42fe72d34add8037', source, chunk, options, context: context?.sources, glossary: context?.glossary });
     const checkpoint = path.join(root, `chunk-${chunk.index}.json`);
     let result = await loadCheckpoint(checkpoint, key);
     if (result) log({ event: 'checkpoint-reused', chunk: chunk.index });

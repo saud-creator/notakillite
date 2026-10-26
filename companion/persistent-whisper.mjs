@@ -34,7 +34,7 @@ export async function hasPersistentWorker(backend='auto') {
   const candidates=process.env.NOTAKILLITE_WORKER?[process.env.NOTAKILLITE_WORKER]:kinds.map(kind=>path.join(root,'vendor','whisper',kind,`notakillite-worker${process.platform==='win32'?'.exe':''}`));
   for(const candidate of candidates) if(await access(candidate).then(()=>true,()=>false)) return true; return false;
 }
-export async function persistentPass({ modelFile, wav, language, prompt, threadCount, signal, backend }) {
+export async function persistentPass({ modelFile, wav, language, prompt, threadCount, signal, backend, vad = false, vadModelPath }) {
   const kinds=backend==='cpu'?['cpu']:backend==='auto'?['cuda','vulkan','cpu']:[backend,'cpu'];
   const candidates=process.env.NOTAKILLITE_WORKER?[process.env.NOTAKILLITE_WORKER]:kinds.map(kind=>path.join(root,'vendor','whisper',kind,`notakillite-worker${process.platform==='win32'?'.exe':''}`));
   let program; for (const candidate of candidates) if (await access(candidate).then(()=>true,()=>false)) { program = candidate; break; }
@@ -46,7 +46,9 @@ export async function persistentPass({ modelFile, wav, language, prompt, threadC
   try {
   let terms = prompt;
   while (terms && (await worker.request({ type:'tokenize', text:terms },signal)).tokens > 96) terms = terms.slice(0, Math.floor(terms.length * .8)).replace(/\s+\S*$/, '');
-  const result=await worker.request({ file:wav, language, prompt:terms, threads:threadCount || 1 },signal);
+  const useVad=vad===true;
+  const result=await worker.request({ file:wav, language, prompt:terms, threads:threadCount || 1, vad:useVad, ...(useVad?{vadModelPath}: {}) },signal);
+  if(typeof result.vadApplied!=='boolean'||result.vadApplied!==useVad||!Number.isInteger(result.vadSegments)||result.vadSegments<0) throw new Error('Native worker does not report applied voice detection.');
   if(!Array.isArray(result.segments)||result.segments.some(s=>!Number.isFinite(s.start)||!Number.isFinite(s.end)||s.end<s.start||typeof s.text!=='string')) throw new Error('Invalid native transcript.');
   return { ...result, build: backend === 'cpu' ? 'cpu' : 'native', persistent:true }; }
   catch(e) { worker.close(); workers.delete(key); if (signal?.aborted) throw e; return null; }

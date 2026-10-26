@@ -7,6 +7,7 @@
 #include "whisper.h"
 #include "ggml-backend.h"
 #include "json.hpp"
+#include "device-policy.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -20,9 +21,11 @@
 #endif
 #include <iostream>
 #include <string>
+#include <system_error>
 #include <vector>
 using json = nlohmann::json;
 static bool offloaded = false;
+static std::string selected_backend;
 static uint64_t peak_rss() {
 #ifdef _WIN32
     PROCESS_MEMORY_COUNTERS counters; if(GetProcessMemoryInfo(GetCurrentProcess(),&counters,sizeof(counters))) return counters.PeakWorkingSetSize;
@@ -33,8 +36,50 @@ static uint64_t peak_rss() {
 }
 static void logger(enum ggml_log_level, const char * text, void *) {
     std::string line(text);
-    if (line.find("using CUDA") != std::string::npos || line.find("using Vulkan") != std::string::npos) offloaded = true;
+    if (line.find("using CUDA") != std::string::npos || line.find("using Vulkan") != std::string::npos) {
+        offloaded = true;
+        const auto from = line.find("using "), to = line.find(" backend", from);
+        if (from != std::string::npos && to != std::string::npos) selected_backend = line.substr(from + 6, to - from - 6);
+    }
+    const auto failed = line.find("failed to initialize ");
+    if (failed != std::string::npos) {
+        const auto from = failed + std::string("failed to initialize ").size();
+        const auto to = line.find(" backend", from);
+        if (to != std::string::npos) {
+            const auto failed_backend = line.substr(from, to - from);
+            if (selected_backend.empty() || selected_backend == failed_backend) {
+                offloaded = false;
+                selected_backend.clear();
+            }
+        }
+    }
     std::cerr << text;
+}
+static int preferred_gpu_ordinal(const std::string &model_path) {
+    std::error_code error;
+    const auto file_bytes = std::filesystem::file_size(std::filesystem::u8path(model_path), error);
+    const std::uint64_t model_bytes = error ? 0 : static_cast<std::uint64_t>(file_bytes);
+    std::vector<notakillite::GpuCandidate> candidates;
+    int ordinal = 0;
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto device = ggml_backend_dev_get(i);
+        const auto type = ggml_backend_dev_type(device);
+        if (type != GGML_BACKEND_DEVICE_TYPE_GPU && type != GGML_BACKEND_DEVICE_TYPE_IGPU) continue;
+        size_t free_bytes = 0, total_bytes = 0;
+        ggml_backend_dev_memory(device, &free_bytes, &total_bytes);
+        candidates.push_back({ordinal++, type == GGML_BACKEND_DEVICE_TYPE_GPU ? notakillite::GpuType::dedicated : notakillite::GpuType::integrated,
+            static_cast<std::uint64_t>(free_bytes), static_cast<std::uint64_t>(total_bytes)});
+    }
+    return notakillite::select_gpu_ordinal(candidates, model_bytes);
+}
+static std::string device_description() {
+    for (size_t i = 0; i < ggml_backend_dev_count(); i++) {
+        auto device = ggml_backend_dev_get(i);
+        if ((offloaded && selected_backend == ggml_backend_dev_name(device)) ||
+            (!offloaded && ggml_backend_dev_type(device) == GGML_BACKEND_DEVICE_TYPE_CPU))
+            return ggml_backend_dev_description(device);
+    }
+    return "Unknown";
 }
 static uint32_t u32(const unsigned char *p) { return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24; }
 static std::vector<float> wav(const std::string &name) {
@@ -58,6 +103,10 @@ static int run(int argc, char **argv) {
     whisper_log_set(logger,nullptr);
     ggml_backend_load_all();
     auto cp=whisper_context_default_params(); cp.use_gpu= !(argc>2 && std::string(argv[2])=="--cpu");
+    if(cp.use_gpu) {
+        cp.gpu_device=preferred_gpu_ordinal(argv[1]);
+        if(cp.gpu_device<0) cp.use_gpu=false;
+    }
     auto *ctx=whisper_init_from_file_with_params(argv[1],cp); if(!ctx) return 3;
     std::string line;
     while(std::getline(std::cin,line)) {
@@ -71,7 +120,16 @@ static int run(int argc, char **argv) {
             auto samples=wav(request.at("file").get<std::string>());
             auto p=whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
             auto language=request.value("language", "auto"), prompt=request.value("prompt", "");
+            const bool useVad=request.value("vad", false);
+            auto vadModelPath=request.value("vadModelPath", std::string());
             p.language=language.c_str(); p.n_threads=std::max(1,request.value("threads",1)); p.no_context=true;
+            p.vad=useVad;
+            if(useVad) {
+                if(vadModelPath.empty()) throw std::runtime_error("VAD model path is required when voice detection is enabled");
+                p.vad_model_path=vadModelPath.c_str();
+                p.vad_params.min_silence_duration_ms=500;
+                p.vad_params.speech_pad_ms=200;
+            }
             p.print_progress=false; p.print_realtime=false; p.print_timestamps=false; p.print_special=false; p.suppress_nst=true;
             std::vector<whisper_token> prefix(96);
             int count=prompt.empty()?0:whisper_tokenize(ctx,prompt.c_str(),prefix.data(),(int)prefix.size());
@@ -80,7 +138,7 @@ static int run(int argc, char **argv) {
             if(whisper_full(ctx,p,samples.data(),(int)samples.size())) throw std::runtime_error("Inference failed");
             json segments=json::array();
             for(int i=0;i<whisper_full_n_segments(ctx);i++) segments.push_back({{"start",whisper_full_get_segment_t0(ctx,i)/100.0},{"end",whisper_full_get_segment_t1(ctx,i)/100.0},{"text",whisper_full_get_segment_text(ctx,i)}});
-            std::cout<<json({{"id",id},{"result",{{"segments",segments},{"language",whisper_lang_str(whisper_full_lang_id(ctx))},{"device",offloaded?"GPU":"CPU"},{"promptTokens",count},{"nativeMetrics",{{"workerPeakRssBytes",peak_rss()},{"inferenceMs",std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count()}}}}}}).dump()<<std::endl;
+            std::cout<<json({{"id",id},{"result",{{"segments",segments},{"language",whisper_lang_str(whisper_full_lang_id(ctx))},{"device",offloaded?"GPU":"CPU"},{"backendName",offloaded?selected_backend:"CPU"},{"deviceName",device_description()},{"promptTokens",count},{"vadApplied",p.vad},{"vadSegments",p.vad?whisper_full_n_vad_segments(ctx):0},{"nativeMetrics",{{"workerPeakRssBytes",peak_rss()},{"inferenceMs",std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-started).count()}}}}}}).dump()<<std::endl;
         } catch(const std::exception &e) { std::cout<<json({{"id",request.value("id",0)},{"error",e.what()}}).dump()<<std::endl; }
     }
     whisper_free(ctx); return 0;

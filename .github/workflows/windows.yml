@@ -53,7 +53,9 @@ jobs:
           cmake -S ../native/worker -DWHISPER_SOURCE="$pwd" -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF `
             -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build --config Release -j 4 --target whisper-cli notakillite-worker
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           New-Item -ItemType Directory -Force ..\whisper-vulkan | Out-Null
           Copy-Item build\bin\Release\notakillite-worker.exe, build\bin\Release\whisper-cli.exe, build\bin\Release\whisper.dll ..\whisper-vulkan\
           Copy-Item build\bin\Release\ggml*.dll ..\whisper-vulkan\
@@ -66,9 +68,64 @@ jobs:
           path: whisper-vulkan
           retention-days: 30
 
+  whisper-cpu:
+    name: Build whisper.cpp (CPU)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore cached build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: whisper-cpu
+          key: whisper-cpu-${{ env.WHISPER_COMMIT }}-worker-v1-${{ hashFiles('native/worker/**') }}
+
+      - name: Check out whisper.cpp
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ env.WHISPER_COMMIT }}
+          path: whisper.cpp
+
+      - name: Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        working-directory: whisper.cpp
+        run: |
+          cmake -S ../native/worker -DWHISPER_SOURCE="$pwd" -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON `
+            -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF `
+            -DGGML_CUDA=OFF -DGGML_VULKAN=OFF -DGGML_HIP=OFF -DGGML_MUSA=OFF `
+            -DGGML_WEBGPU=OFF -DGGML_METAL=OFF -DGGML_SYCL=OFF -DGGML_OPENCL=OFF `
+            -DGGML_OPENVINO=OFF -DGGML_VIRTGPU=OFF -DGGML_RPC=OFF `
+            -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build --config Release -j 4 --target whisper-cli notakillite-worker
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force ..\whisper-cpu | Out-Null
+          Copy-Item build\bin\Release\notakillite-worker.exe, build\bin\Release\whisper-cli.exe, build\bin\Release\whisper.dll ..\whisper-cpu\
+          Copy-Item build\bin\Release\ggml*.dll ..\whisper-cpu\
+          Copy-Item LICENSE ..\whisper-cpu\LICENSE
+          Get-ChildItem ..\whisper-cpu
+
+      - name: Test GPU selection policy
+        shell: pwsh
+        run: |
+          cmake -S native/worker -B policy-tests -A x64 -DNOTAKILLITE_DEVICE_POLICY_TEST_ONLY=ON
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build policy-tests --config Release --target notakillite-device-policy-test
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir policy-tests -C Release --output-on-failure
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: whisper-cpu
+          path: whisper-cpu
+          retention-days: 30
+
   build:
     name: Test and build Notakillite.exe
-    needs: whisper-vulkan
+    needs: [whisper-vulkan, whisper-cpu]
     runs-on: windows-latest
     env:
       NOTAKILLITE_MODELS_DIR: ${{ github.workspace }}\.local\models
@@ -101,10 +158,24 @@ jobs:
           name: whisper-vulkan
           path: vendor/whisper/vulkan
 
+      # Overlay the project-built CPU executables and DLLs onto the verified upstream bundle.
+      # Download extraction overwrites matching payload files and leaves its verification stamp intact.
+      - name: Add the project CPU build
+        uses: actions/download-artifact@v4
+        with:
+          name: whisper-cpu
+          path: vendor/whisper/cpu
+
       - name: Tests
         run: npm test
 
-      - name: Test direct native worker (CPU)
+      - name: Test direct CPU native worker
+        run: node scripts/test-native-worker.mjs vendor/whisper/cpu/notakillite-worker.exe .local/native-worker-cpu-report.json --backend cpu
+
+      - name: Test CPU CLI Unicode paths
+        run: node scripts/test-cli-unicode.mjs vendor/whisper/cpu/whisper-cli.exe
+
+      - name: Test Vulkan native worker in CPU mode
         run: node scripts/test-native-worker.mjs vendor/whisper/vulkan/notakillite-worker.exe .local/native-worker-report.json --backend cpu
 
       - name: Build EXE

@@ -141,7 +141,7 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
     : groq
     ? await transcribeGroq({ ...common, key: secrets.groqKey, onStage: stage => onStage({ ...stage, fraction: stage.fraction * 0.8 }) })
     : await transcribeLocal({ ...common, modelsDir, threads: resource.threads, backend: options.backend, onStage: stage => onStage({ ...stage, fraction: Math.min(0.8, stage.fraction) }), ...(runner ? { runner } : {}) });
-  log({ event: 'decode', nativeMetrics:first.nativeMetrics, engine: first.engine, model: first.model, device: first.device, language: first.language,
+  log({ event: 'decode', nativeMetrics:first.nativeMetrics, engine: first.engine, model: first.model, device: first.device, backendName:first.backendName, deviceName:first.deviceName, language: first.language,
     settings: first.settings ? { language: first.settings.language, vad: first.settings.vad, prompt: Boolean(first.settings.prompt), textContextFedBack: false } : { chunked: '10 min', textContextFedBack: false } });
 
   // Known Whisper artifacts (e.g. "Subtitles by the Amara.org community") are removed from whole
@@ -226,7 +226,7 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
   onStage({ phase: 'Quality check complete', fraction: 1 });
   return {
     rawSegments: first.segments, contextSources: context?.sources || [], resources: resource,
-    language: first.language, model: first.model, device: first.device, engine: first.engine, duration, segments: segments.map(s=>({...s,pdfReferences:retrieveContext(context,s.text).references})),
+    language: first.language, model: first.model, device: first.device, backendName:first.backendName, deviceName:first.deviceName, engine: first.engine, duration, segments: segments.map(s=>({...s,pdfReferences:retrieveContext(context,s.text).references})),
     quality: { status, finalAudit: final, repairs, unresolved: unresolved.map(({ findings, ...u }) => u), attempts, findings: report.findings, artifactsRemoved: artifacts.length },
   };
 }

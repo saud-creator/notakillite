@@ -173,16 +173,19 @@ export function whisperArgs({ modelFile, wav, language, prompt = '', vad = true,
 }
 
 /** One whisper-cli pass; segments are relative to the start of `wav`. */
-export async function whisperPass({ modelFile, wav, language, prompt, vad = true, work, name = 'whisper', signal, onLine, only, threadCount, backend = 'auto', runner = runWhisper, production = runner === runWhisper }) {
-  if (production) { const result = await persistentPass({ modelFile, wav, language, prompt, threadCount, signal, backend }); if (result) return result; }
+export async function whisperPass({ modelFile, wav, language, prompt, vad, work, name = 'whisper', signal, onLine, only, threadCount, backend = 'auto', runner = runWhisper, production = runner === runWhisper }) {
+  if (production) { const result = await persistentPass({ modelFile, wav, language, prompt, threadCount, signal, backend, vad: vad === true, vadModelPath: vadModel }); if (result) return result; }
+  // The measured persistent worker path keeps VAD off on its initial pass. The CLI keeps its
+  // existing VAD-on default; an explicit retry boolean is honored by either backend.
+  let appliedVad = vad ?? true;
   const output = path.join(work, name);
   await rm(`${output}.json`, { force: true });
   let result;
-  try { result = await runner(whisperArgs({ modelFile, wav, language, prompt, vad, output, threadCount }), { signal, onLine, only }); }
-  catch(error) { if(signal?.aborted || !vad || !production) throw error; await rm(`${output}.json`,{force:true}); result = await runner(whisperArgs({modelFile,wav,language,prompt,vad:false,output,threadCount}),{signal,onLine,only}); result.fallback='voice-detector-disabled-after-error'; }
+  try { result = await runner(whisperArgs({ modelFile, wav, language, prompt, vad:appliedVad, output, threadCount }), { signal, onLine, only }); }
+  catch(error) { if(signal?.aborted || !appliedVad || !production) throw error; await rm(`${output}.json`,{force:true}); appliedVad=false; result = await runner(whisperArgs({modelFile,wav,language,prompt,vad:false,output,threadCount}),{signal,onLine,only}); result.fallback='voice-detector-disabled-after-error'; }
   const parsed = parseWhisperJson(await readFile(`${output}.json`, 'utf8'));
   await rm(`${output}.json`, { force: true });
-  return { ...parsed, build: result.build, device: /(?:using (?:CUDA|Vulkan\d+)|offload(?:ed|ing).*(?:GPU|device)|ggml_(?:cuda|vulkan).*using device)/i.test(result.stderr || '') ? 'GPU' : 'CPU' };
+  return { ...parsed, build: result.build, device: /(?:using (?:CUDA|Vulkan\d+)|offload(?:ed|ing).*(?:GPU|device)|ggml_(?:cuda|vulkan).*using device)/i.test(result.stderr || '') ? 'GPU' : 'CPU', vadApplied:appliedVad, vadSegments:null, ...(result.fallback?{fallback:result.fallback}:{}) };
 }
 
 export function parseWhisperJson(json) {
@@ -209,6 +212,6 @@ export async function transcribeLocal({ ffmpeg, wav, duration, model = 'turbo', 
     const match = /progress\s*=\s*(\d+)%/.exec(line);
     if (match) onStage({ phase: `Transcribing ${match[1]}% · ${WHISPER_MODELS[model].label}`, fraction: 0.32 + Number(match[1]) / 100 * 0.5 });
   } });
-  return { language: spoken === 'auto' ? pass.language : spoken, segments: pass.segments, engine: 'local', model: WHISPER_MODELS[model].label, device: pass.device, build: pass.build,
-    nativeMetrics:pass.nativeMetrics, settings: { modelFile, model, language: spoken, prompt, vad: true }, runner };
+  return { language: spoken === 'auto' ? pass.language : spoken, segments: pass.segments, engine: 'local', model: WHISPER_MODELS[model].label, device: pass.device, build: pass.build, backendName:pass.backendName, deviceName:pass.deviceName,
+    nativeMetrics:pass.nativeMetrics, settings: { modelFile, model, language: spoken, prompt, vad: pass.vadApplied }, runner };
 }

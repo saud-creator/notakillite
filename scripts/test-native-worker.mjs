@@ -1,7 +1,7 @@
 // Real native-worker acceptance. Uses generated public test speech; never prints transcripts.
 // node scripts/test-native-worker.mjs <worker.exe> [report.json] [--backend cpu|auto|gpu-required]
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, rm, writeFile, readdir } from 'node:fs/promises';
+import { access, copyFile, mkdir, mkdtemp, rm, writeFile, readdir } from 'node:fs/promises';
 import { once } from 'node:events';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -10,7 +10,7 @@ import os from 'node:os';
 import ffmpeg from 'ffmpeg-static';
 import { runTool } from '../companion/audio.mjs';
 import { WhisperWorker } from '../companion/persistent-whisper.mjs';
-import { modelPath, verifiedModel, WHISPER_MODELS } from '../companion/whisper.mjs';
+import { modelPath, verifiedModel, WHISPER_MODELS, vadModel } from '../companion/whisper.mjs';
 import { hashFile } from '../core/artifacts.mjs';
 
 const [workerArgument, ...testArguments] = process.argv.slice(2);
@@ -36,11 +36,14 @@ if (!['cpu', 'auto', 'gpu-required'].includes(backend)) throw new Error(`Unknown
 const execute = promisify(execFile), root = process.cwd(), program = path.resolve(workerArgument);
 const model = modelPath(process.env.NOTAKILLITE_MODELS_DIR || path.join(root, '.local/models'), 'tiny');
 assert.ok(await verifiedModel(model, WHISPER_MODELS.tiny), 'Install the pinned Tiny model before this offline test.');
+assert.ok(await access(vadModel).then(() => true, () => false), 'Install the pinned VAD model before this offline test.');
 const local = path.join(root, '.local'); await mkdir(local, { recursive: true });
 const directory = await mkdtemp(path.join(local, "native-worker QA العربية ' "));
 const unicodeModel = path.join(directory, "tiny's model.bin"), wav = path.join(directory, 'spoken العربية.wav');
 await copyFile(model, unicodeModel);
 await runTool(ffmpeg, ['-y', '-i', path.join(root, 'tests/fixtures/spoken-lecture.wav'), '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', wav]);
+const paddedWav = path.join(directory, 'padded speech.wav');
+await runTool(ffmpeg, ['-y', '-i', wav, '-af', 'adelay=1000:all=1,apad=pad_dur=1', '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', paddedWav]);
 const worker = new WhisperWorker(program, unicodeModel, backend === 'cpu');
 const report = { commit: (await execute('git', ['rev-parse', 'HEAD'])).stdout.trim(), dirty: Boolean((await execute('git', ['status', '--porcelain'])).stdout.trim()), platform: process.platform, os: os.release(), node: process.version, workerSha256: await hashFile(program), modelSha256: WHISPER_MODELS.tiny.sha256, backend, backendEvidence: [], runs: [], measurementScope: 'Native worker peak working set only; excludes the rest of the application.' };
 report.libraries = await Promise.all((await readdir(path.dirname(program))).filter(name => /\.dll$/i.test(name)).sort().map(async name => ({ name, sha256: await hashFile(path.join(path.dirname(program), name)) })));
@@ -87,8 +90,17 @@ try {
     assert.ok(result.segments.every(s => Number.isFinite(s.start) && s.end >= s.start && typeof s.text === 'string'));
     assert.ok(result.promptTokens > 0 && result.promptTokens <= 96);
     assert.ok(result.nativeMetrics.workerPeakRssBytes > 0);
-    report.runs.push({ repeat, wallMs: performance.now() - started, device: result.device, segments: result.segments.length, promptTokens: result.promptTokens, ...result.nativeMetrics });
+    report.runs.push({ repeat, wallMs: performance.now() - started, device: result.device, backendName: result.backendName, deviceName: result.deviceName, segments: result.segments.length, promptTokens: result.promptTokens, ...result.nativeMetrics });
   }
+  const vadOff = await worker.request({ file: paddedWav, language: 'en', threads: 4, vad: false }, AbortSignal.timeout(30000));
+  assert.equal(worker.child, loadedChild, 'Disabling VAD must keep the retained model process.');
+  assert.equal(vadOff.vadApplied, false, 'The native response must report VAD off.');
+  assert.equal(vadOff.vadSegments, 0, 'The native response must report no VAD segments when VAD is off.');
+  const vadOn = await worker.request({ file: paddedWav, language: 'en', threads: 4, vad: true, vadModelPath: vadModel }, AbortSignal.timeout(30000));
+  assert.equal(worker.child, loadedChild, 'Enabling VAD must reuse the same retained model process.');
+  assert.equal(vadOn.vadApplied, true, 'The native response must report VAD on.');
+  assert.ok(Number.isInteger(vadOn.vadSegments) && vadOn.vadSegments > 0, 'Padded speech must produce VAD segment evidence.');
+  report.vadToggle = { result: 'passed', off: { applied: vadOff.vadApplied, vadSegments: vadOff.vadSegments, decodedSegments: vadOff.segments.length }, on: { applied: vadOn.vadApplied, vadSegments: vadOn.vadSegments, decodedSegments: vadOn.segments.length } };
   await assert.rejects(worker.request({ file: wav, language: 'en', prompt: 'anatomy '.repeat(300), threads: 4 }), /Vocabulary exceeds/);
   assert.ok((await worker.request({ type: 'tokenize', text: 'still ready' })).tokens > 0);
   const longWav = path.join(directory, 'cancel.wav');
