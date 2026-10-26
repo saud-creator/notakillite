@@ -16,3 +16,5 @@ ios/*.xcodeproj/
 /models/
 vendor/whisper/
 notakillite-output/
+
+/vendor/whisper

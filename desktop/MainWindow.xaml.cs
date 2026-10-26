@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private FolderModel? folder;
     private NoteModel? note;
     private JsonElement preferences, browser, engineErrors, transcription;
+    private string[] lecturePdfs = [];
     private string groqKey = "";
     private int revision = -1;
     private bool initialized, applying, busyConnect, closing, quit, playing, detailOpen, foldersOpen, queueExpanded;
@@ -113,6 +114,7 @@ public partial class MainWindow : Window
             ConnectionBanner.Visibility = connection != "Connected" && notes.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             if (!initialized) {
                 SelectTag(Engine, preferences.Text("engine", "deepfilter")); SelectTag(Strength, preferences.Text("strength", "balanced")); SelectTag(Split, preferences.Text("splitMinutes", "0"));
+                SelectTag(ResourcePolicy,preferences.Text("resourcePolicy","auto"));
                 AudioOnly.IsChecked = preferences.Bool("audioOnly"); SearchBox.Text = preferences.Text("search");
                 if (double.TryParse(preferences.Text("windowWidth"), out var width)) Width = Math.Clamp(width, MinWidth, Math.Max(MinWidth, SystemParameters.WorkArea.Width));
                 if (double.TryParse(preferences.Text("windowHeight"), out var height)) Height = Math.Clamp(height, MinHeight, Math.Max(MinHeight, SystemParameters.WorkArea.Height));
@@ -253,11 +255,11 @@ public partial class MainWindow : Window
     }
     private Dictionary<string, object?> ExportOptions() => new()
     {
-        ["engine"] = Tag(Engine, "deepfilter"), ["strength"] = Tag(Strength, "balanced"), ["splitMinutes"] = int.Parse(Tag(Split, "0")),
+        ["ocr"] = OcrBox.IsChecked == true, ["course"] = CourseName.Text.Trim(), ["pdfs"] = lecturePdfs, ["resourcePolicy"] = Tag(ResourcePolicy, "auto"), ["engine"] = Tag(Engine, "deepfilter"), ["strength"] = Tag(Strength, "balanced"), ["splitMinutes"] = int.Parse(Tag(Split, "0")),
         ["transcribe"] = TranscribeBox.IsChecked == true, ["transcriber"] = Tag(Transcriber, "local"), ["language"] = Tag(LanguageBox, "auto"), ["model"] = Tag(Model, "turbo"), ["vocabulary"] = Vocabulary.Text.Trim(),
     };
     private void ScheduleSave() { if (initialized && !applying && !closing) { saveTimer.Stop(); saveTimer.Start(); } }
-    private async Task SavePreferences() { await Command("preferences", new { engine = Tag(Engine, "deepfilter"), strength = Tag(Strength, "balanced"), splitMinutes = int.Parse(Tag(Split, "0")), audioOnly = AudioOnly.IsChecked == true, search = SearchBox.Text, folder = folder?.Key ?? "", selectedNote = note?.Id ?? "", expandedFolders = Flatten(folders).Where(item => item.Expanded).Select(item => item.Key).ToArray(), folderExpansionSaved = true, queueExpanded, theme = currentTheme.Length > 0 ? currentTheme : "dark", windowWidth = ActualWidth, windowHeight = ActualHeight, transcribe = TranscribeBox.IsChecked == true, transcriber = Tag(Transcriber, "local"), language = Tag(LanguageBox, "auto"), model = Tag(Model, "turbo"), vocabulary = Vocabulary.Text.Trim() }); }
+    private async Task SavePreferences() { await Command("preferences", new { engine = Tag(Engine, "deepfilter"), strength = Tag(Strength, "balanced"), splitMinutes = int.Parse(Tag(Split, "0")), audioOnly = AudioOnly.IsChecked == true, search = SearchBox.Text, folder = folder?.Key ?? "", selectedNote = note?.Id ?? "", expandedFolders = Flatten(folders).Where(item => item.Expanded).Select(item => item.Key).ToArray(), folderExpansionSaved = true, queueExpanded, theme = currentTheme.Length > 0 ? currentTheme : "dark", windowWidth = ActualWidth, windowHeight = ActualHeight, resourcePolicy = Tag(ResourcePolicy,"auto"), transcribe = TranscribeBox.IsChecked == true, transcriber = Tag(Transcriber, "local"), language = Tag(LanguageBox, "auto"), model = Tag(Model, "turbo"), vocabulary = Vocabulary.Text.Trim() }); }
     private void Responsive()
     {
         if (BodyGrid is null) return;
@@ -271,8 +273,9 @@ public partial class MainWindow : Window
             bool roomy = ActualWidth >= 1000;
             Grid.SetColumnSpan(WelcomePanel, roomy ? 2 : 3); SidebarColumn.Width = new GridLength(232); InspectorColumn.Width = roomy ? new GridLength(344) : new GridLength(0);
             Grid.SetColumn(InspectorPanel, 2); Grid.SetColumnSpan(InspectorPanel, 1); InspectorPanel.Width = double.NaN; InspectorPanel.HorizontalAlignment = HorizontalAlignment.Stretch; CloseDetailButton.Visibility = Visibility.Collapsed;
-            InspectorPanel.Visibility = roomy ? Visibility.Visible : Visibility.Collapsed;
-            SidebarPanel.Visibility = InspectorScrim.Visibility = FoldersButton.Visibility = DetailButton.Visibility = Visibility.Collapsed; return;
+            InspectorPanel.Visibility = roomy || detailOpen ? Visibility.Visible : Visibility.Collapsed;
+            if (!roomy && detailOpen) { Grid.SetColumn(InspectorPanel,0); Grid.SetColumnSpan(InspectorPanel,3); InspectorPanel.Width=340; InspectorPanel.HorizontalAlignment=HorizontalAlignment.Right; CloseDetailButton.Visibility=Visibility.Visible; }
+            SidebarPanel.Visibility = FoldersButton.Visibility = Visibility.Collapsed; DetailButton.Visibility=Visibility.Visible; InspectorScrim.Visibility=!roomy && detailOpen?Visibility.Visible:Visibility.Collapsed; return;
         }
         Grid.SetColumnSpan(WelcomePanel, 3);
         bool compact = ActualWidth < 1120, narrow = ActualWidth < 900;
@@ -357,14 +360,17 @@ public partial class MainWindow : Window
     }
     private async Task Import(IEnumerable<string> files)
     {
-        var list = files.Where(file => file.Length > 0).Select(Path.GetFullPath).Distinct().Take(200).ToArray(); if (list.Length == 0) return;
+        var all = files.Where(f => f.Length > 0).Select(Path.GetFullPath).Distinct().ToArray();
+        var pdfs = all.Where(f => Path.GetExtension(f).Equals(".pdf", StringComparison.OrdinalIgnoreCase)).ToArray(); if(pdfs.Length > 0) { lecturePdfs=pdfs; PdfSummary.Text=$"{pdfs.Length} PDF(s) attached"; }
+        if(all.Length > 200) { ShowError("Import up to 200 items at a time."); return; }
+        var list = all.Where(f => !Path.GetExtension(f).Equals(".pdf",StringComparison.OrdinalIgnoreCase)).Where(file => file.Length > 0).Select(Path.GetFullPath).Distinct().Take(200).ToArray(); if (list.Length == 0) return;
         var data = ExportOptions(); data["files"] = list;
         StatusText.Text = "Reading your files…";
         var result = await Command("export", data);
         if (result is JsonElement value) { var count = value.Get("ids").Rows().Count(); StatusText.Text = $"Added {count} recording{(count == 1 ? "" : "s")} to the queue. Results are saved together in one folder."; StatusText.SetResourceReference(TextBlock.ForegroundProperty, "MutedBrush"); }
         queueExpanded = true; QueueList.Visibility = Visibility.Visible;
     }
-    private async void OnImport(object sender, RoutedEventArgs e) { var dialog = new OpenFileDialog { Title = "Choose lectures: Notability notes or audio", Multiselect = true, Filter = "Lectures|*.note;*.zip;*.m4a;*.mp3;*.wav;*.aac;*.alac;*.flac;*.ogg;*.opus;*.webm;*.caf;*.aif;*.aiff;*.wma;*.amr;*.mp4|Notability notes|*.note|All files|*.*" }; if (dialog.ShowDialog(this) == true) await Import(dialog.FileNames); }
+    private async void OnImport(object sender, RoutedEventArgs e) { var dialog = new OpenFileDialog { Title = "Choose lectures: Notability notes or audio", Multiselect = true, Filter = "Lectures|*.pdf;*.note;*.zip;*.m4a;*.mp3;*.wav;*.aac;*.alac;*.flac;*.ogg;*.opus;*.webm;*.caf;*.aif;*.aiff;*.wma;*.amr;*.mp4|Notability notes|*.note|All files|*.*" }; if (dialog.ShowDialog(this) == true) await Import(dialog.FileNames); }
     private async void OnPaste(object sender, RoutedEventArgs e) => await PasteAsync();
     private async Task PasteAsync()
     {
@@ -384,6 +390,24 @@ public partial class MainWindow : Window
         } catch (Exception error) { ShowError("Could not read the clipboard: " + error.Message); }
     }
     private void OnCopyTranscript(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) { var file = job.Value.Text("transcriptPath"); if (File.Exists(file)) { System.Windows.Clipboard.SetText(File.ReadAllText(file)); StatusText.Text = "Transcript copied. Paste it into ChatGPT or Claude."; } else ShowError("The transcript was moved or deleted. Open its export folder to check."); } }
+    private void OnReviewTranscript(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) new ReviewWindow(core,job) { Owner=this }.Show(); }
+    private async void OnPauseJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("pause",new { id=job.Id }); }
+    private async void OnResumeJob(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) await Command("resume",new { id=job.Id }); }
+    private async void OnSaveCourse(object sender, RoutedEventArgs e) { await Command("saveCourse",new {name=CourseName.Text.Trim(),vocabulary=Vocabulary.Text.Trim()}); }
+    private async void OnLoadCourse(object sender, RoutedEventArgs e) { var courses=await Command("courses"); if(courses is JsonElement c) Vocabulary.Text=c.Text(CourseName.Text.Trim()); }
+    private async void OnFindTranscripts(object sender, RoutedEventArgs e) {
+        var window=new Window { Owner=this,Title="Search transcripts / البحث في النصوص",Width=800,Height=500,MinWidth=500 };
+        var root=new DockPanel {Margin=new Thickness(12)}; var input=new TextBox {MinHeight=30}; DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
+        var find=new Button {Content="Search / بحث"};DockPanel.SetDock(find,Dock.Top);root.Children.Add(find);var results=new ListBox();root.Children.Add(results);window.Content=root;
+        find.Click+=async (_,_)=>{ var found=await Command("searchTranscripts",new {text=input.Text});results.Items.Clear();if(found is JsonElement rows) foreach(var r in rows.Rows())results.Items.Add(new ListBoxItem {Content=r.Text("start")+"s · "+r.Text("text"),Tag=r.Clone()}); };
+        results.MouseDoubleClick+=(_,_)=>{if(results.SelectedItem is ListBoxItem item && item.Tag is JsonElement r) {var job=jobs.FirstOrDefault(j=>j.Id==r.Text("job"));if(job is not null)new ReviewWindow(core,job,r.Text("segment")){Owner=this}.Show();}};
+        window.Show(); input.Focus();
+    }
+    private async void OnPreflight(object sender,RoutedEventArgs e) { var result=await Command("preflight",ExportOptions()); if(result is JsonElement p)MessageBox.Show(this,$"Audio engine ready: {p.Bool("engineReady")}\nModel ready: {p.Bool("modelReady")}\nOne-time download: {Math.Round(double.Parse(p.Text("downloadBytes","0"))/1048576)} MB\nOutput writable: {p.Bool("outputWritable")}\nCloud processing selected: {p.Bool("cloud")}\n"+string.Join("\n",p.Get("warnings").Rows().Select(w=>w.GetString())),"Processing readiness / جاهزية المعالجة"); }
+    private async void OnResourceInfo(object sender,RoutedEventArgs e) { var result=await Command("capabilities");if(result is JsonElement c)MessageBox.Show(this,$"{c.Text("cpu")}\nAvailable CPU allocation: {c.Text("effective")}\nRAM available: {Math.Round(double.Parse(c.Text("available","0"))/1073741824,1)} GiB\nDetected NVIDIA devices: {c.Get("gpus").Rows().Count()}\nVulkan support is verified when inference starts.","Processing resources"); }
+    private void OnClearPdfs(object sender,RoutedEventArgs e) { lecturePdfs=[];PdfSummary.Text="Audio only / صوت فقط"; }
+    private void OnAttachPdfs(object sender, RoutedEventArgs e) { var dialog=new OpenFileDialog { Multiselect=true, Filter="Lecture PDF|*.pdf" }; if(dialog.ShowDialog(this)==true) { lecturePdfs=dialog.FileNames; PdfSummary.Text=$"{lecturePdfs.Length} PDF(s) attached"; } }
+    private void OnProcessingPreset(object sender, SelectionChangedEventArgs e) { if(Engine is null || Model is null) return; var preset=Tag(ProcessingPreset,"balanced"); if(preset=="custom") return; SelectTag(Engine,preset=="fast"?"none":"rnnoise"); SelectTag(Model,preset=="accuracy"?"large-v3":"turbo"); }
     private void OnOpenTranscript(object sender, RoutedEventArgs e) { if ((sender as Button)?.DataContext is JobModel job) { var file = job.Value.Text("transcriptPath"); if (File.Exists(file)) Process.Start(new ProcessStartInfo(file) { UseShellExecute = true }); else ShowError("The transcript was moved or deleted. Open its export folder to check."); } }
     private async void OnDrop(object sender, DragEventArgs e) { if (e.Data.GetData(DataFormats.FileDrop) is string[] files) { e.Handled = true; await Import(files); } }
     private async void OnChooseOutput(object sender, RoutedEventArgs e) { var dialog = new OpenFolderDialog { Title = "Choose export destination" }; if (dialog.ShowDialog(this) == true) { await Command("preferences", new { outputPath = dialog.FolderName }); StatusText.Text = "Future exports will be saved in " + dialog.FolderName; } }

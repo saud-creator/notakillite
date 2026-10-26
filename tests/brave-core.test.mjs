@@ -20,7 +20,7 @@ test('native core queues AAC M4A, preserves job history and settings across vers
   let service = await new CoreService({ dataRoot: root, connector: noBrowser() }).init();
   try {
     service.savePreferences({ engine: 'rnnoise', search: 'العربية', folder: 'fixture/folder' });
-    const clean = (await service.enqueue({ file: input, engine: 'deepfilter', strength: 'balanced', splitMinutes: 0, transcribe: false })).ids[0];
+    const clean = (await service.enqueue({ file: input, engine: process.platform === 'win32' ? 'deepfilter' : 'rnnoise', strength: 'balanced', splitMinutes: 0, transcribe: false })).ids[0];
     const original = (await service.enqueue({ file: input, engine: 'none', splitMinutes: 0, transcribe: false })).ids[0];
     await wait(() => service.jobs.find(job => job.id === original)?.status === 'done');
     assert.equal(service.jobs.find(job => job.id === clean).status, 'done', service.jobs.find(job => job.id === clean).error);
@@ -38,7 +38,7 @@ test('native core queues AAC M4A, preserves job history and settings across vers
   } finally { if (!service.closing) await service.close(); }
 });
 
-test('a durable queued local job is recoverable and cancellation stops native processing', { timeout: 120000 }, async t => {
+test('a durable queued local job is recoverable and cancellation stops native processing', { timeout: 120000, skip:process.platform !== 'win32' && 'DeepFilterNet3 Windows runtime required' }, async t => {
   const root = await directory(t, 'notakillite-recovery-');
   const input = path.join(root, 'long.wav');
   await runTool(ffmpeg, ['-y', '-stream_loop', '-1', '-i', fileURLToPath(new URL('./fixtures/spoken-lecture.wav', import.meta.url)), '-t', '240.137', '-ac', '1', '-ar', '48000', '-c:a', 'pcm_s16le', input]);

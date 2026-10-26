@@ -32,7 +32,7 @@ public sealed class CoreClient : IAsyncDisposable
             finally { foreach (var request in pending.Values) request.TrySetException(new Exception("The app core stopped. Reopen Notakillite to recover saved jobs.")); pending.Clear(); if (process is { HasExited: true } && process.ExitCode != 0) Failed?.Invoke("The app core stopped. Reopen the app; saved exports and sign-in are retained."); }
         });
         _ = Task.Run(async () => { while (await process.StandardError.ReadLineAsync() is { } _) { /* Do not surface browser diagnostics or website data in the UI. */ } });
-        await Request("state");
+        var hello=await Request("state"); if(int.TryParse(hello.Text("protocolVersion","1"),out var protocol) && protocol>2) throw new Exception("The desktop and processing core versions do not match. Reinstall the complete application.");
     }
     public async Task<JsonElement> Request(string type, object? parameters = null)
     {
@@ -41,6 +41,7 @@ public sealed class CoreClient : IAsyncDisposable
         var completion = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously); pending[id] = completion;
         await writer.WaitAsync();
         try { await process.StandardInput.WriteLineAsync(JsonSerializer.Serialize(new { id, type, @params = parameters ?? new { } })); await process.StandardInput.FlushAsync(); }
+        catch { pending.TryRemove(id,out _); throw; }
         finally { writer.Release(); }
         try { return await completion.Task.WaitAsync(TimeSpan.FromMinutes(type == "connect" ? 2 : 5)); }
         finally { pending.TryRemove(id, out _); }

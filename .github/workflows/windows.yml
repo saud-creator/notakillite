@@ -20,12 +20,13 @@ jobs:
     name: Build whisper.cpp (Vulkan GPU)
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Restore cached build
         id: cache
         uses: actions/cache@v4
         with:
           path: whisper-vulkan
-          key: whisper-vulkan-${{ env.WHISPER_COMMIT }}-${{ env.VULKAN_VERSION }}-v1
+          key: whisper-vulkan-${{ env.WHISPER_COMMIT }}-${{ env.VULKAN_VERSION }}-worker-v2-${{ hashFiles('native/worker/**') }}
 
       - name: Check out whisper.cpp
         if: steps.cache.outputs.cache-hit != 'true'
@@ -49,12 +50,12 @@ jobs:
         shell: pwsh
         working-directory: whisper.cpp
         run: |
-          cmake -S . -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON `
+          cmake -S ../native/worker -DWHISPER_SOURCE="$pwd" -B build -A x64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON `
             -DGGML_VULKAN=ON -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_NATIVE=OFF `
             -DWHISPER_BUILD_TESTS=OFF -DWHISPER_SDL2=OFF
-          cmake --build build --config Release -j 4 --target whisper-cli
+          cmake --build build --config Release -j 4 --target whisper-cli notakillite-worker
           New-Item -ItemType Directory -Force ..\whisper-vulkan | Out-Null
-          Copy-Item build\bin\Release\whisper-cli.exe, build\bin\Release\whisper.dll ..\whisper-vulkan\
+          Copy-Item build\bin\Release\notakillite-worker.exe, build\bin\Release\whisper-cli.exe, build\bin\Release\whisper.dll ..\whisper-vulkan\
           Copy-Item build\bin\Release\ggml*.dll ..\whisper-vulkan\
           Copy-Item LICENSE ..\whisper-vulkan\LICENSE
           Get-ChildItem ..\whisper-vulkan
@@ -105,6 +106,9 @@ jobs:
 
       - name: Build EXE
         run: node scripts/build-exe.mjs
+
+      - name: Verify actual packaged payload
+        run: npm run test:packaged
 
       - uses: actions/upload-artifact@v4
         with:

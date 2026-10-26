@@ -1,0 +1,9 @@
+{
+  "device": "CPU",
+  "segments": 2,
+  "promptTokens": 4,
+  "nativeMetrics": {
+    "inferenceMs": 800,
+    "workerPeakRssBytes": 156884992
+  }
+}

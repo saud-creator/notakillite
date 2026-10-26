@@ -1,0 +1,38 @@
+{
+  "hardware": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "logical": 3,
+    "effective": 2,
+    "total": 8589934592,
+    "available": 4514689024
+  },
+  "runs": [
+    {
+      "repeat": 0,
+      "cliSeconds": 11.861881011,
+      "workerSeconds": 10.968365581999999,
+      "workerWarm": false,
+      "sameText": true,
+      "nativeDevice": "CPU"
+    },
+    {
+      "repeat": 1,
+      "cliSeconds": 11.547395847000004,
+      "workerSeconds": 15.265843120999998,
+      "workerWarm": true,
+      "sameText": true,
+      "nativeDevice": "CPU"
+    },
+    {
+      "repeat": 2,
+      "cliSeconds": 14.569464788000005,
+      "workerSeconds": 10.254549262000008,
+      "workerWarm": true,
+      "sameText": true,
+      "nativeDevice": "CPU"
+    }
+  ],
+  "comparison": "Same model, 12-second private sample, English, no VAD; cold CLI processes vs model reused within native worker. No human reference, not an accuracy or whole-lecture benchmark."
+}

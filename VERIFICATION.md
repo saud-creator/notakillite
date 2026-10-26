@@ -1,3 +1,5 @@
+> Historical verification below describes an older release. Current desktop implementation evidence and unverified gates are tracked in [docs/implementation/VERIFICATION.md](docs/implementation/VERIFICATION.md). Do not treat this older report as proof of the current executable.
+
 # Notakillite 0.5.0 verification
 
 21 October 2026 · Windows x64 · Local connector build

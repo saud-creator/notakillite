@@ -1,0 +1,37 @@
+CMake Warning (deprecated) at /workspace/transcription/whisper-build/whisper.cpp-b5454/CMakeLists.txt:1 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+This warning is for project developers.  Use -Wno-author or -Wno-deprecated
+to suppress it.
+
+-- whisper.cpp version: 1.9.5-dev
+fatal: not a git repository (or any of the parent directories): .git
+fatal: not a git repository (or any of the parent directories): .git
+-- Warning: ccache not found - consider installing it for faster compilation or disable this warning with GGML_CCACHE=OFF
+-- CMAKE_SYSTEM_PROCESSOR: x86_64
+-- GGML_SYSTEM_ARCH: x86
+-- Including CPU backend
+-- x86 detected
+-- Adding CPU backend variant ggml-cpu: -msse4.2;-mf16c;-mfma;-mbmi2;-mavx;-mavx2 GGML_SSE42;GGML_F16C;GGML_FMA;GGML_BMI2;GGML_AVX;GGML_AVX2
+-- ggml version: 0.26.0
+-- ggml commit:  unknown
+-- Configuring done (0.0s)
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/notakillite-implementation/.local/worker-build
+[ 28%] Built target ggml-base
+[ 77%] Built target ggml-cpu
+[ 85%] Built target ggml
+[ 94%] Built target whisper
+[ 97%] Building CXX object CMakeFiles/notakillite-worker.dir/main.cpp.o
+[100%] Linking CXX executable bin/notakillite-worker
+[100%] Built target notakillite-worker
+[ 25%] Built target ggml-base
+[ 67%] Built target ggml-cpu
+[ 75%] Built target ggml
+[ 82%] Built target whisper
+[ 95%] Built target common
+[100%] Built target whisper-cli

@@ -1,0 +1,651 @@
+{
+  "schemaVersion": 1,
+  "commit": "4057da59ce4a6be8857a1f78fa90d4a0bba7dff9",
+  "dirty": true,
+  "capabilities": {
+    "platform": "linux",
+    "arch": "x64",
+    "cpu": "AMD EPYC 9V45 96-Core Processor",
+    "gpus": [],
+    "logical": 3,
+    "effective": 2,
+    "total": 8589934592,
+    "available": 4628193280
+  },
+  "node": "v24.19.0",
+  "platform": "6.18.55",
+  "startedAt": "2026-10-26T09:19:50.905Z",
+  "runs": [
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "audio-only",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.656758106000002,
+      "duration": 10.56,
+      "rtf": 0.9144657297348486,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 5,
+          "referenceWords": 19,
+          "wer": 0.2631578947368421,
+          "charErrors": 7,
+          "referenceChars": 102,
+          "cer": 0.06862745098039216
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 19,
+          "wer": 0.10526315789473684,
+          "charErrors": 4,
+          "referenceChars": 99,
+          "cer": 0.04040404040404041
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 44.72186
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 99.981765
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2477838336,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 101.77383700000001
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9654.646928
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 18,
+          "findings": [],
+          "elapsedMs": 9656.499841
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 17,
+          "elapsedMs": 9656.724516
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "matched-context",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.936253311000002,
+      "duration": 10.56,
+      "rtf": 0.9409330786931819,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 9,
+          "referenceWords": 19,
+          "wer": 0.47368421052631576,
+          "charErrors": 56,
+          "referenceChars": 102,
+          "cer": 0.5490196078431373
+        },
+        "normalized": {
+          "wordErrors": 9,
+          "referenceWords": 19,
+          "wer": 0.47368421052631576,
+          "charErrors": 55,
+          "referenceChars": 99,
+          "cer": 0.5555555555555556
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 320.066014
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 384.71361400000023
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2445619200,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 387.82566399999996
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9935.367360000002
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 11,
+          "findings": [],
+          "elapsedMs": 9936.076658
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 11,
+          "elapsedMs": 9936.181824000001
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1904",
+      "sourceHash": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "profile": "wrong-context",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.911922243000001,
+      "duration": 10.56,
+      "rtf": 0.938629000284091,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 1,
+          "referenceWords": 19,
+          "wer": 0.05263157894736842,
+          "charErrors": 2,
+          "referenceChars": 102,
+          "cer": 0.0196078431372549
+        },
+        "normalized": {
+          "wordErrors": 1,
+          "referenceWords": 19,
+          "wer": 0.05263157894736842,
+          "charErrors": 1,
+          "referenceChars": 99,
+          "cer": 0.010101010101010102
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 10.56,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 52.74544500000047
+        },
+        {
+          "event": "pieces",
+          "pauses": 4,
+          "pauseThresholdDb": -60,
+          "speechSeconds": 7,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 10.56,
+              "hash": "0529d921fe2b0e39"
+            }
+          ],
+          "elapsedMs": 132.53386800000226
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2445361152,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 134.5896329999996
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9910.913039000003
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 19,
+          "findings": [],
+          "elapsedMs": 9911.686802
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 19,
+          "elapsedMs": 9911.851127000002
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "audio-only",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.573995979999996,
+      "duration": 8.76,
+      "rtf": 1.0929219155251138,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 4,
+          "referenceWords": 21,
+          "wer": 0.19047619047619047,
+          "charErrors": 7,
+          "referenceChars": 112,
+          "cer": 0.0625
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 49.930671999998594
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 109.65470699999787
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2444705792,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 113.02310999999827
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": false,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9573.470226000001
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 9573.853648
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 9573.979976999999
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "matched-context",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.898110613000004,
+      "duration": 8.76,
+      "rtf": 1.1299213028538817,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 6,
+          "referenceWords": 21,
+          "wer": 0.2857142857142857,
+          "charErrors": 9,
+          "referenceChars": 112,
+          "cer": 0.08035714285714286
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 48.3685719999994
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 101.36988199999905
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2444623872,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 103.38761099999829
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9897.321706000002
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 9897.858517
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 9898.053287000002
+        }
+      ]
+    },
+    {
+      "fixture": "en_us-1675",
+      "sourceHash": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "profile": "wrong-context",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      },
+      "repeat": 0,
+      "seconds": 9.813840880000003,
+      "duration": 8.76,
+      "rtf": 1.120301470319635,
+      "device": "CPU",
+      "quality": "ok",
+      "retryAudioSeconds": 0,
+      "referenceVerified": true,
+      "forbiddenTermsFound": [],
+      "accuracy": {
+        "strict": {
+          "wordErrors": 5,
+          "referenceWords": 21,
+          "wer": 0.23809523809523808,
+          "charErrors": 8,
+          "referenceChars": 112,
+          "cer": 0.07142857142857142
+        },
+        "normalized": {
+          "wordErrors": 2,
+          "referenceWords": 21,
+          "wer": 0.09523809523809523,
+          "charErrors": 3,
+          "referenceChars": 108,
+          "cer": 0.027777777777777776
+        }
+      },
+      "events": [
+        {
+          "event": "source",
+          "role": "original",
+          "duration": 8.76,
+          "sampleRate": 16000,
+          "channels": 1,
+          "elapsedMs": 50.46991500000149
+        },
+        {
+          "event": "pieces",
+          "pauses": 1,
+          "pauseThresholdDb": -39.545417,
+          "speechSeconds": 8,
+          "pieces": [
+            {
+              "start": 0,
+              "end": 8.76,
+              "hash": "2946f3dc16c1db94"
+            }
+          ],
+          "elapsedMs": 104.28769300000567
+        },
+        {
+          "event": "resources",
+          "policy": "auto",
+          "cpuBudget": 2,
+          "threads": 2,
+          "workers": 1,
+          "memoryBudget": 2443759616,
+          "estimatedWorkerBytes": 1848153024.5,
+          "insufficientMemory": false,
+          "preparedQueueLimit": 2,
+          "elapsedMs": 107.12456200000452
+        },
+        {
+          "event": "decode",
+          "engine": "local",
+          "model": "Whisper large-v3-turbo",
+          "device": "CPU",
+          "language": "en",
+          "settings": {
+            "language": "en",
+            "vad": true,
+            "prompt": true,
+            "textContextFedBack": false
+          },
+          "elapsedMs": 9813.166124000003
+        },
+        {
+          "event": "audit",
+          "stage": "first-pass",
+          "status": "ok",
+          "words": 21,
+          "findings": [],
+          "elapsedMs": 9813.587442000004
+        },
+        {
+          "event": "quality",
+          "status": "ok",
+          "finalAudit": "ok",
+          "repairs": 0,
+          "unresolved": 0,
+          "attempts": 0,
+          "words": 21,
+          "elapsedMs": 9813.808181
+        }
+      ]
+    }
+  ],
+  "measurementScope": "End-to-end transcription; process-tree native RAM/VRAM and Windows UI latency require platform instrumentation."
+}

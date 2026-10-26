@@ -1,3 +1,5 @@
+> Development desktop implementation: see [workflow and controls](docs/implementation/USER-GUIDE.md), [measured results](docs/implementation/benchmarks/RESULTS.md), and [verification status](docs/implementation/VERIFICATION.md). These changes have not been published as a Windows release.
+
 # Notakillite 0.7.0
 
 Turn Notability lecture recordings into **clean audio and AI-ready transcripts**. Import a Notability note export (`.note`), audio files or a whole folder; Notakillite removes background noise such as air conditioning, transcribes the speech, and writes **one Markdown file per lecture** that you can upload to ChatGPT or Claude ("what did the doctor say is on the exam?").

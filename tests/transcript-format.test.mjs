@@ -41,7 +41,7 @@ test('the batch index links every lecture transcript', () => {
 });
 
 test('transcript settings are validated with safe defaults', () => {
-  assert.deepEqual(transcriptSettings({}), { transcribe: true, transcriber: 'local', language: 'auto', model: 'turbo', transcribeFrom: 'cleaned', vocabulary: '', aiPrompt: true });
+  assert.deepEqual(transcriptSettings({}), { transcribe: true, transcriber: 'local', language: 'auto', model: 'turbo', transcribeFrom: 'cleaned', vocabulary: '', aiPrompt: true, resourcePolicy:'auto', threads:0, workers:1, chunkSeconds:60, backend:'auto', ocr:false, pdfBias:false });
   assert.throws(() => transcriptSettings({ transcriber: 'openai' }), /Groq/);
   assert.throws(() => transcriptSettings({ language: 'fr' }), /Arabic/);
   assert.throws(() => transcriptSettings({ vocabulary: 'x'.repeat(601) }), /600/);

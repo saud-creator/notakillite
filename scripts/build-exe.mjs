@@ -12,6 +12,7 @@ await verifyEngines();
 const connectorManifest = JSON.parse(await readFile(path.join(root, 'brave-connector', 'manifest.json'), 'utf8'));
 const derivedId = [...createHash('sha256').update(Buffer.from(connectorManifest.key, 'base64')).digest().subarray(0, 16)].map(byte => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15))).join('');
 if (derivedId !== EXTENSION_ID || connectorManifest.version !== APP_VERSION) throw new Error('The stable Brave connector identity or version is inconsistent.');
+const version = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(root,'package.json'),'utf8')).version;
 const release = path.join(root, 'release');
 const stage = path.join(release, `brave-payload-${Date.now()}`);
 const relative = path.relative(release, path.resolve(stage));
@@ -32,7 +33,7 @@ function run(program, args, extraEnv = {}) {
 const pinnedDotnet = path.join(root, '.tools', 'dotnet');
 const dotnetRoot = existsSync(path.join(pinnedDotnet, 'dotnet.exe')) ? pinnedDotnet : process.env.DOTNET_ROOT || path.join(process.env.ProgramFiles || 'C:\\Program Files', 'dotnet');
 const pinned = dotnetRoot === pinnedDotnet;
-run(path.join(dotnetRoot, 'dotnet.exe'), ['publish', path.join(root, 'desktop', 'Notakillite.Desktop.csproj'), '-c', 'Release', ...(pinned ? ['--no-restore'] : []), '--nologo', '-o', stage], { DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false', ...(pinned ? { DOTNET_CLI_HOME: path.join(root, '.tools', 'dotnet-home'), NUGET_PACKAGES: path.join(root, '.tools', 'nuget') } : {}) });
+run(path.join(dotnetRoot, 'dotnet.exe'), ['publish', path.join(root, 'desktop', 'Notakillite.Desktop.csproj'), '-c', 'Release', `-p:Version=${version}`, ...(pinned ? ['--no-restore'] : []), '--nologo', '-o', stage], { DOTNET_CLI_TELEMETRY_OPTOUT: '1', DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false', ...(pinned ? { DOTNET_CLI_HOME: path.join(root, '.tools', 'dotnet-home'), NUGET_PACKAGES: path.join(root, '.tools', 'nuget') } : {}) });
 for (const name of ['core', 'companion', 'vendor', 'package.json', 'README.md', 'VERIFICATION.md']) await cp(path.join(root, name), path.join(stage, name), { recursive: true });
 await cp(path.join(root, 'brave-connector'), path.join(stage, 'brave-connector'), { recursive: true });
 await cp(path.join(root, 'core', 'notability-adapter.js'), path.join(stage, 'brave-connector', 'adapter.js'));
@@ -46,6 +47,7 @@ await cp(path.join(dotnetRoot, 'ThirdPartyNotices.txt'), path.join(stage, 'DOTNE
 const binary = path.join(stage, 'node_modules', 'ffmpeg-static');
 await mkdir(binary, { recursive: true });
 for (const name of ['index.js', 'package.json', 'ffmpeg.exe', 'LICENSE', 'ffmpeg.exe.LICENSE', 'ffmpeg.exe.README', 'README.md']) await cp(path.join(root, 'node_modules', 'ffmpeg-static', name), path.join(binary, name));
+for (const module of ['pdfjs-dist', '@napi-rs']) await cp(path.join(root,'node_modules',module),path.join(stage,'node_modules',module),{recursive:true});
 await cp(path.join(root, 'node_modules', 'playwright-core'), path.join(stage, 'node_modules', 'playwright-core'), { recursive: true });
 const payload = path.join(release, 'brave-payload.zip');
 run(windowsTar, ['-a', '-c', '-f', payload, '-C', stage, '.']);
