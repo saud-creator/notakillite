@@ -14,6 +14,8 @@ Windows M4 follow-up: direct testing of the CI Vulkan worker exposed missing dyn
 
 Windows M5 follow-up: actual review-window interaction exposed selected source/PDF values rendered as record details instead of labels. The shared ComboBox selection template now honors the item template selector/string format; review selectors have bounded widths and seven controls have bilingual accessibility names. SDK build passed with zero warnings/errors; final package interaction recheck follows. A real synthetic-job edit autosaved as revision 2 with history and raw text retained.
 
+A second observed M5 issue left the review label at `unreviewed` after a successful edit had been saved as `edited`. The label now refreshes from the server document after save/history restore/candidate discard; error and retry-pending messages remain intact. Compiler verification passed; actual rebuilt UI interaction is required before closing the gate.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |

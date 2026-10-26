@@ -49,7 +49,7 @@ public sealed class ReviewWindow : Window
         Button("−10s", (_,_) => player.Position = TimeSpan.FromSeconds(Math.Max(0,player.Position.TotalSeconds-10))); Button("+10s", (_,_) => player.Position += TimeSpan.FromSeconds(10));
         var speed = new ComboBox { ItemsSource = new double[] { .75, 1, 1.25, 1.5, 2 }, SelectedIndex = 1, Width = 65 }; AutomationProperties.SetName(speed, "Playback speed / سرعة التشغيل"); speed.SelectionChanged += (_,_) => player.SpeedRatio = (double)speed.SelectedItem; tools.Children.Add(speed);
         tools.Children.Add(source); source.SelectionChanged += async (_,_) => { if(source.SelectedItem is AudioSource audio) { var position=player.Position.TotalSeconds+audioOffset; audioOffset=audio.Offset; player.Source=new Uri(audio.Path); player.Position=TimeSpan.FromSeconds(Math.Max(0,position-audioOffset)); var generation=++audioGeneration; try { var data=await core.Request("waveform",new {id=job.Id,fileName=Path.GetFileName(audio.Path),source=audio.Name.StartsWith("Original")?"original":"cleaned"}); if(generation==audioGeneration) DrawWaveform(data); } catch(Exception e) {status.Text=e.Message;} } };
-        Button("History / السجل", (_,_) => ShowHistory()); Button("Save / حفظ", async (_,_) => { candidate=false; await Save(); }); Button("PDF terms / مصطلحات PDF", (_,_) => MessageBox.Show(this,string.Join(", ",document.Get("metadata").Get("suggestedTerms").Rows().Select(t=>t.Text("term"))),"Suggested vocabulary — review required")); Button("Discard candidate", (_,_) => { candidate=false; dirty=false; loading=true; editor.Text=current?.Text ?? ""; loading=false; }); Button("Retry passage / إعادة المقطع", async (_,_) => await Retry());
+        Button("History / السجل", (_,_) => ShowHistory()); Button("Save / حفظ", async (_,_) => { candidate=false; await Save(); }); Button("PDF terms / مصطلحات PDF", (_,_) => MessageBox.Show(this,string.Join(", ",document.Get("metadata").Get("suggestedTerms").Rows().Select(t=>t.Text("term"))),"Suggested vocabulary — review required")); Button("Discard candidate", (_,_) => { if(retryPending) return; var wasCandidate=candidate; candidate=false; dirty=false; loading=true; editor.Text=current?.Text ?? ""; loading=false; if(wasCandidate) UpdateReviewStatus(); }); Button("Retry passage / إعادة المقطع", async (_,_) => await Retry());
         tools.Children.Add(format); Button("Export / تصدير", async (_,_) => { try { if(candidate) { status.Text="Save or discard the candidate before export."; return; } await Save(); if(dirty) return; var result=await core.Request("exportTranscript",new { id=job.Id,format=format.SelectedItem?.ToString() }); status.Text=result.Text("path"); } catch(Exception e) { status.Text=e.Message; } });
         var bottom = new StackPanel(); DockPanel.SetDock(bottom,Dock.Bottom); root.Children.Add(bottom); bottom.Children.Add(waveform); bottom.Children.Add(timeline); bottom.Children.Add(clock); bottom.Children.Add(status); bottom.Children.Add(player);
         timeline.Maximum=Math.Max(1,double.TryParse(job.Value.Get("transcript").Text("seconds"),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var duration)?duration:60);
@@ -80,7 +80,7 @@ public sealed class ReviewWindow : Window
     {
         var window=new Window {Owner=this,Title="Revision history / سجل التعديلات",Width=700,Height=450};var panel=new DockPanel {Margin=new Thickness(12)};var restore=new Button {Content="Restore selected text / استعادة النص"};DockPanel.SetDock(restore,Dock.Bottom);panel.Children.Add(restore);var list=new ListBox();panel.Children.Add(list);
         foreach(var entry in document.Get("history").Rows())list.Items.Add(new ListBoxItem {Content=entry.Text("at")+" · "+entry.Text("before")+" → "+entry.Text("after"),Tag=entry.Clone()});window.Content=panel;
-        restore.Click+=async (_,_)=>{if(candidate || dirty){status.Text="Save or discard current changes first.";return;}if(list.SelectedItem is ListBoxItem item && item.Tag is JsonElement h)try{document=await core.Request("editTranscript",new {id=job.Id,revision=int.Parse(document.Text("revision")),segmentId=h.Text("segmentId"),text=h.Text("before")});Populate();if(current is not null){loading=true;editor.Text=current.Text;loading=false;}window.Close();}catch(Exception e){status.Text=e.Message;}};window.Show();
+        restore.Click+=async (_,_)=>{if(candidate || dirty){status.Text="Save or discard current changes first.";return;}if(list.SelectedItem is ListBoxItem item && item.Tag is JsonElement h)try{document=await core.Request("editTranscript",new {id=job.Id,revision=int.Parse(document.Text("revision")),segmentId=h.Text("segmentId"),text=h.Text("before")});Populate();if(current is not null){loading=true;editor.Text=current.Text;loading=false;}UpdateReviewStatus();window.Close();}catch(Exception e){status.Text=e.Message;}};window.Show();
     }
     private async Task SaveAndClose() { await Save(); if(!dirty) Close(); }
     private async Task Load()
@@ -91,7 +91,7 @@ public sealed class ReviewWindow : Window
             var original=job.Value.Text("localFile"); if(File.Exists(original)) audio.Insert(0,new AudioSource("Original / الأصل",original));
             source.ItemsSource=audio; source.SelectedIndex=0;
             pdfPages.ItemsSource=document.Get("metadata").Get("pdfs").Rows().SelectMany(f=>Enumerable.Range(1,int.Parse(f.Text("pages","0"))).Select(p=>new PdfPage(Path.GetFileName(f.Text("file"))+" · "+p,f.Text("file"),p))).ToArray(); pdfPages.SelectedIndex=0;
-            status.Text="Automatic audit: "+document.Get("quality").Text("status")+" · Human review: "+document.Text("reviewStatus");
+            UpdateReviewStatus();
         } catch(Exception e) { status.Text=e.Message; }
     }
     private void Populate()
@@ -100,6 +100,10 @@ public sealed class ReviewWindow : Window
         var rows=document.Get("segments").Rows().Select(s=>new Row(s.Text("id"),$"{(s.Bool("marker")?"⚠ ":"")}{TimeSpan.FromSeconds(double.Parse(s.Text("start"),System.Globalization.CultureInfo.InvariantCulture)):hh\\:mm\\:ss}  {s.Text("text")}",double.Parse(s.Text("start"),System.Globalization.CultureInfo.InvariantCulture),double.Parse(s.Text("end"),System.Globalization.CultureInfo.InvariantCulture),s.Text("text"))).ToList();
         segments.ItemsSource=rows; current=rows.FirstOrDefault(r=>r.Id==id); segments.SelectedItem=current; loading=false;
     }
+    private void UpdateReviewStatus()
+    {
+        status.Text="Automatic audit: "+document.Get("quality").Text("status")+" · Human review: "+document.Text("reviewStatus");
+    }
     private async Task Save()
     {
         if(candidate || !dirty || current is null) return;
@@ -107,7 +111,7 @@ public sealed class ReviewWindow : Window
         try {
         if(!dirty || current is null) return;
         var text=editor.Text; var row=current; dirty=false;
-        try { document=await core.Request("editTranscript",new { id=job.Id,revision=int.Parse(document.Text("revision")),segmentId=row.Id,text }); Populate(); }
+        try { document=await core.Request("editTranscript",new { id=job.Id,revision=int.Parse(document.Text("revision")),segmentId=row.Id,text }); Populate(); UpdateReviewStatus(); }
         catch(Exception e) { dirty=true; status.Text=e.Message; }
         } finally { saveGate.Release(); }
     }
