@@ -18,7 +18,7 @@
 | Course glossary and transcript search | Added local dictionaries and timestamped FTS search |
 | Language/accessibility | New controls bilingual; existing RTL behavior retained; complete resource-based localization and Narrator QA remain pending |
 | Performance and accuracy | Offline runner, public pinned corpus importer, strict/normalized WER/CER and recorded short-clip experiments |
-| Packaging | Native worker build, PDF/native canvas payload, actual packaged ASR smoke and CI package gate added; Windows execution pending |
+| Packaging | Native worker build, PDF/native canvas payload, actual packaged ASR smoke and CI package gate; Windows local-only launcher forwarding/cache repair now tested; full current payload verification tracked separately |
 | Study generation/translation/diarization/multi-GPU | Intentionally deferred after core acceptance |
 
 See [Windows continuation evidence](WINDOWS-2026-10-26.md) for the hardware, actual checks, failures and acceptance limits. Windows worker cancellation/restart coverage now runs without a POSIX-only skip. The public FLEURS importer writes its Arabic manifest explicitly as UTF-8 on Windows.

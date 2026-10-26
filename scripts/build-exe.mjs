@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { verifyEngines } from './install-engines.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const nodeMajor = Number(process.versions.node.split('.')[0]);
+if (process.platform !== 'win32' || process.arch !== 'x64' || nodeMajor !== 24) {
+  throw new Error(`Building the Windows x64 package requires Windows x64 Node.js 24.x (found ${process.platform}/${process.arch} Node.js ${process.versions.node}).`);
+}
 await verifyEngines();
 const connectorManifest = JSON.parse(await readFile(path.join(root, 'brave-connector', 'manifest.json'), 'utf8'));
 const derivedId = [...createHash('sha256').update(Buffer.from(connectorManifest.key, 'base64')).digest().subarray(0, 16)].map(byte => String.fromCharCode(97 + (byte >> 4), 97 + (byte & 15))).join('');

@@ -6,6 +6,8 @@ Current continuation branch: `codex/desktop-lecture-pipeline-20261026-8c9fb91`, 
 
 26 October Windows M1 follow-up: final merged recovery findings now produce merged timed review markers before export; raw ASR and trusted neighboring text remain available. The related Windows recovery/desktop suite passed 29/29 without skips. Complete packaged/UI acceptance remains separate.
 
+Windows packaging follow-up: the outer launcher now forwards explicit local-only/isolated-data options with correct Windows argument quoting and repairs cached payloads missing required files. A focused launcher test passed extraction repair, readiness/current-pointer publication, Unicode paths, real WPF capture and clean exit. The build now requires Windows x64 Node 24 before writing outputs; the full package test asserts that embedded runtime.
+
 | ID | Milestone | Acceptance |
 |---|---|---|
 | P0 | M1 output ownership, final audit, clear completed, settings | Behavioral regressions; no cross-job overwrite or false success |
