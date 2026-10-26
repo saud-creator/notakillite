@@ -4,6 +4,8 @@ Historical starting commit: `4057da59ce4a6be8857a1f78fa90d4a0bba7dff9`. The orig
 
 Windows continuation results are recorded separately in [the 26 October 2026 report](WINDOWS-2026-10-26.md). The sections below preserve the original Linux evidence and its limitations.
 
+The current unsigned Windows candidate was built from clean `a12a008`; its [delivery receipt](benchmarks/windows-delivery-acceptance.json) links the actual EXE hash, native CI artifacts and physical CPU/MX350 checks. [Source CI](https://github.com/saud-creator/notakillite/actions/runs/40369164103) passed 109 tests with zero failures and one missing-Brave skip, then passed actual packaged ASR/audio/PDF/cache-repair/WPF startup checks. The final local extracted EXE passed eight headless codec/engine jobs and native-file identity checks. The local full suite's memory rejection, private full-lecture processing, interrupted foreground fault testing and remaining account/accessibility/power/signing gates are documented explicitly in the Windows report.
+
 ## Passed and measured
 
 - Node regression suite: 100 tests; 96 passed; zero failed; four explicitly skipped Windows/Brave runtime cases. Includes actual local tiny/English transcription, audio/container processing, final quality gating, checkpoint reuse/invalidation, output ownership and long-title collisions, preserved prior exports on retry, SQLite migration/backup, revision races, cancellation/restart, actual PDF extraction/rendering, and default-off PDF bias. Synthetic worker cancellation uses local child processes; this sandbox requires the local networking allowance for Node subprocess tests.

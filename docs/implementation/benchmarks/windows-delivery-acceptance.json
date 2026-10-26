@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-26T17:38:41.366Z",
+  "status": "unsigned engineering candidate; full acceptance remains pending",
+  "build": {
+    "version": "0.7.0",
+    "commit": "a12a00842d3c4bbdee7ba27724440b4135819b1f",
+    "dirty": false,
+    "builtAt": "2026-10-26T17:29:56.269Z",
+    "platform": "win32",
+    "arch": "x64",
+    "node": "v24.20.0",
+    "whisperCommit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+    "accountDataIncluded": false,
+    "whisperModelsIncluded": false
+  },
+  "executable": {
+    "file": "Notakillite.exe",
+    "bytes": 210741760,
+    "sha256": "78df0321a60192134f72a05ea8d62bfd0d875638eb675a2c31290113ac4585c8"
+  },
+  "connector": {
+    "file": "Notakillite-Brave-Connector.zip",
+    "bytes": 10932,
+    "sha256": "d03fa7b435644711b131fb66cdc8563d0e1b232ab166eca6ea3b4789363c3cc2"
+  },
+  "tests": {
+    "windowsCI": {
+      "result": "passed",
+      "runId": 40369164103,
+      "url": "https://github.com/saud-creator/notakillite/actions/runs/40369164103",
+      "headCommit": "a12a00842d3c4bbdee7ba27724440b4135819b1f",
+      "checkoutCommit": "abebf72f01e7bf4dc2d0745acfde63f2ee9665df",
+      "regression": {
+        "tests": 110,
+        "passed": 109,
+        "failed": 0,
+        "skipped": 1,
+        "skipReason": "Brave Browser is not installed on GitHub runner; the same installed-Brave synthetic test passed in the local regression."
+      },
+      "package": {
+        "result": "passed",
+        "packagedCore": "passed",
+        "packagedASR": "passed",
+        "pdfDependencies": "passed",
+        "bundledNode": "v24.22.1",
+        "cacheRepair": "passed",
+        "launcher": {
+          "localOnlyFlag": "forwarded",
+          "isolatedDataDirectory": "Unicode path used",
+          "packagedExtraction": "passed",
+          "desktopReady": "passed",
+          "currentPointer": "passed",
+          "capture": "passed",
+          "cleanExit": "passed"
+        },
+        "codecsAndEngines": 8,
+        "durableHistory": "passed",
+        "temporaryCleanup": "passed"
+      },
+      "releasePublished": false
+    },
+    "localRegression": {
+      "tests": 110,
+      "passed": 109,
+      "failed": 1,
+      "skipped": 0,
+      "failure": "Actual Tiny scheduling rejected insufficient available RAM; safety reserve retained."
+    },
+    "focusedReview": {
+      "passed": 27,
+      "failed": 0,
+      "skipped": 0
+    },
+    "finalExeHeadless": {
+      "result": "passed",
+      "jobs": [
+        {
+          "codec": "aac",
+          "engine": "rnnoise",
+          "result": "passed"
+        },
+        {
+          "codec": "aac",
+          "engine": "deepfilter",
+          "result": "passed"
+        },
+        {
+          "codec": "aac",
+          "engine": "hybrid",
+          "result": "passed"
+        },
+        {
+          "codec": "aac",
+          "engine": "none",
+          "result": "passed"
+        },
+        {
+          "codec": "alac",
+          "engine": "rnnoise",
+          "result": "passed"
+        },
+        {
+          "codec": "alac",
+          "engine": "deepfilter",
+          "result": "passed"
+        },
+        {
+          "codec": "alac",
+          "engine": "hybrid",
+          "result": "passed"
+        },
+        {
+          "codec": "alac",
+          "engine": "none",
+          "result": "passed"
+        }
+      ],
+      "pdfDependencies": "passed",
+      "durableJobs": 8,
+      "temporaryCleanup": "passed",
+      "scope": "headless actual EXE payload; ASR scheduling and WPF excluded"
+    },
+    "nativeHardware": {
+      "cpu": {
+        "result": "passed",
+        "sourceCommit": "6d5f80b717960144e8f1ae235253b7bbfde95b72",
+        "dirty": false,
+        "workerSha256": "99933f892870d9a70744c15a67d99451f5b037e2593f5a901f52d69420c97727",
+        "deviceName": "11th Gen Intel(R) Core(TM) i7-11700T @ 1.40GHz",
+        "backendName": "CPU",
+        "unicodePaths": "passed",
+        "retainedModel": "passed",
+        "tokenizerBudget": "passed",
+        "vadToggle": {
+          "result": "passed",
+          "off": {
+            "applied": false,
+            "vadSegments": 0,
+            "decodedSegments": 2
+          },
+          "on": {
+            "applied": true,
+            "vadSegments": 2,
+            "decodedSegments": 2
+          }
+        },
+        "cancellationMs": 18.756000000000313,
+        "cancellationAndRestart": "passed",
+        "scope": "Native worker peak working set only; excludes the rest of the application."
+      },
+      "gpu": {
+        "result": "passed",
+        "sourceCommit": "6d5f80b717960144e8f1ae235253b7bbfde95b72",
+        "dirty": false,
+        "workerSha256": "b4e3eac24b66ec1055e7782aa29b82ace91378bdb32a82f6ae4289d97a2a8290",
+        "deviceName": "NVIDIA GeForce MX350",
+        "backendName": "Vulkan1",
+        "unicodePaths": "passed",
+        "retainedModel": "passed",
+        "tokenizerBudget": "passed",
+        "vadToggle": {
+          "result": "passed",
+          "off": {
+            "applied": false,
+            "vadSegments": 0,
+            "decodedSegments": 2
+          },
+          "on": {
+            "applied": true,
+            "vadSegments": 2,
+            "decodedSegments": 2
+          }
+        },
+        "cancellationMs": 54.847499999999854,
+        "cancellationAndRestart": "passed",
+        "scope": "Native worker peak working set only; excludes the rest of the application."
+      }
+    }
+  },
+  "models": {
+    "includedInExe": false,
+    "verifiedLocalCachePrepared": [
+      "tiny",
+      "turbo"
+    ],
+    "pins": {
+      "tiny": {
+        "bytes": 77691713,
+        "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
+      },
+      "turbo": {
+        "bytes": 874188075,
+        "sha256": "317eb69c11673c9de1e1f0d459b253999804ec71ac4c23c17ecf5fbe24e259a1"
+      }
+    }
+  },
+  "limitations": [
+    "Full private lecture turbo run is pending sufficient RAM (approximately 5.2 GB available for the configured policy).",
+    "Foreground save-failure/close/candidate/navigation acceptance was interrupted by manual desktop activity; further interaction deferred while user uses the computer.",
+    "Real-account Brave connector installation/pairing/export, Narrator/DPI, sleep/restart and signed distribution remain unverified.",
+    "Public four-clip screening is not medical/code-switching accuracy evidence; CPU 2x and RTF<1 targets were not demonstrated."
+  ],
+  "privacy": {
+    "privateInputsUploaded": false,
+    "accountDataIncluded": false,
+    "privateTranscriptTextIncluded": false
+  },
+  "nativeReceipts": {
+    "cpu": {
+      "whisperCommit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+      "wrapperHeadCommit": "e13a02b8f41b2756761776c46f01487965b68b80",
+      "ciMergeCommit": "30fb4e18ea5de2206013ef6fc2f26c5435da1a0e",
+      "ciRun": 40365234119,
+      "artifactId": 12671080775,
+      "archiveSha256": "498c3e9feb4bb45a4fcf4df38103e621faf1fdd47a5e090bd9d043a5a5959bc0",
+      "files": [
+        {
+          "name": "LICENSE",
+          "sha256": "bcd8ec749126d45cb06737d0690295d73df4b6e7e194205bcf91190368f27285"
+        },
+        {
+          "name": "ggml-base.dll",
+          "sha256": "3f6c996273173620b33f3bfba1624ca4f89bdde177fbc74e723533d293e22f1d"
+        },
+        {
+          "name": "ggml-cpu-alderlake.dll",
+          "sha256": "febac0417a18537d9863a69da7f0c4238d5815d95e9c59e0e6ce3d203b9fd45d"
+        },
+        {
+          "name": "ggml-cpu-cannonlake.dll",
+          "sha256": "03179492f6f50ef986ffcb5a260beb671864ffd3a56a4e00f3197d76487002e6"
+        },
+        {
+          "name": "ggml-cpu-cascadelake.dll",
+          "sha256": "88787b0d81a9591a2ba015d54e540ba7e7cf85d39df0b06d7d5eb0812bd1c648"
+        },
+        {
+          "name": "ggml-cpu-haswell.dll",
+          "sha256": "3357e4e95b4f8f9cd8e037eab623c1f814c5978cb194a776064400d7695bfc88"
+        },
+        {
+          "name": "ggml-cpu-icelake.dll",
+          "sha256": "11d7a3ac1ccec8bc6d85562989264963adeb08ddc4d3e62871ba289db249d9fc"
+        },
+        {
+          "name": "ggml-cpu-sandybridge.dll",
+          "sha256": "1a223acf29dd268df969d46e170d3caf1a6b9bbd08d853f3fc396ff53e9ca49b"
+        },
+        {
+          "name": "ggml-cpu-skylakex.dll",
+          "sha256": "1e0416ad553b4d8881672728766cf1b6e95aea0cc9214796cda7f8d058f797ec"
+        },
+        {
+          "name": "ggml-cpu-sse42.dll",
+          "sha256": "5a5ae7ae6995406447a38aee1238d22a7deb86a448ebb4a9e7e8d9dda07bad59"
+        },
+        {
+          "name": "ggml-cpu-x64.dll",
+          "sha256": "51ae5b2b912b4a8f23497ffa87be601dab655dc8379fafecdcc8a072de918bd4"
+        },
+        {
+          "name": "ggml.dll",
+          "sha256": "dca8d5c2f78351fa3234b40a2ac99a11d7ff46b41b0a4acf75e02d1bb3ec018e"
+        },
+        {
+          "name": "notakillite-worker.exe",
+          "sha256": "99933f892870d9a70744c15a67d99451f5b037e2593f5a901f52d69420c97727"
+        },
+        {
+          "name": "whisper-cli.exe",
+          "sha256": "f4fec85ad0825d087d0970ba78e41d6da65d4a4aabce62417942a13e40fedae7"
+        },
+        {
+          "name": "whisper.dll",
+          "sha256": "3065175adee8926b2cf6b66510df5fcbd5f9b966c8ec0680bf92fd5466781de9"
+        }
+      ]
+    },
+    "vulkan": {
+      "whisperCommit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+      "wrapperHeadCommit": "e13a02b8f41b2756761776c46f01487965b68b80",
+      "ciMergeCommit": "30fb4e18ea5de2206013ef6fc2f26c5435da1a0e",
+      "ciRun": 40365234119,
+      "artifactId": 12669569451,
+      "archiveSha256": "f4606489a6bc3b35f0a2c8307130bb183e0e013063fa62344419797dcb09fb57",
+      "files": [
+        {
+          "name": "LICENSE",
+          "sha256": "bcd8ec749126d45cb06737d0690295d73df4b6e7e194205bcf91190368f27285"
+        },
+        {
+          "name": "ggml-base.dll",
+          "sha256": "f324a8f51c0bdf94aa984ade50368ff9ac7be19372dfe7e5ec455ff825aeb886"
+        },
+        {
+          "name": "ggml-cpu-alderlake.dll",
+          "sha256": "205d15d722086d98f3cf8798cdcb6db07e8bdac449d19d5cdbf8fe30ebd1e7f2"
+        },
+        {
+          "name": "ggml-cpu-cannonlake.dll",
+          "sha256": "d98a7f84dbda684c33376d83814e3cf23597c95a8171e8855d270ac6e19bb471"
+        },
+        {
+          "name": "ggml-cpu-cascadelake.dll",
+          "sha256": "de95461c18d8e5a7b1919cf6631701f50b1cb89e979a503347153374fc52456a"
+        },
+        {
+          "name": "ggml-cpu-haswell.dll",
+          "sha256": "da061a323a7c4d50e4faf37cdbe829d312fc29becab0a8442c875bf311cf53b5"
+        },
+        {
+          "name": "ggml-cpu-icelake.dll",
+          "sha256": "0e7d37f714640cf41565f1ab4b6addb884d35df28ea5f5792b8dfbe75d1f8423"
+        },
+        {
+          "name": "ggml-cpu-sandybridge.dll",
+          "sha256": "f02c2f442b7c40307c1451a10b138bb3c62775073c1524532ec4a61ee2fff5f0"
+        },
+        {
+          "name": "ggml-cpu-skylakex.dll",
+          "sha256": "1a0c5844f5d6c9ee7eee85f1e73c24fa1acc919b5018d905cab7b9d182e90ab1"
+        },
+        {
+          "name": "ggml-cpu-sse42.dll",
+          "sha256": "f05ddd173cc53191550521cfdef6cb2cde70399ade7e6273f11094bd0d25d4b5"
+        },
+        {
+          "name": "ggml-cpu-x64.dll",
+          "sha256": "25cde1e976be9ce820fdd0b63fe2526aa4fe6c88c1251b393cf309dc21410161"
+        },
+        {
+          "name": "ggml-vulkan.dll",
+          "sha256": "893547b7fcac07a6ed1afe308872daa76892fae21af419f0d2d5ac4b5a81181f"
+        },
+        {
+          "name": "ggml.dll",
+          "sha256": "4029e3bcc5dd0b64313173ef3bfbf8e46f5514f4c6a4d7a3b4b6d040a3fff193"
+        },
+        {
+          "name": "notakillite-worker.exe",
+          "sha256": "b4e3eac24b66ec1055e7782aa29b82ace91378bdb32a82f6ae4289d97a2a8290"
+        },
+        {
+          "name": "whisper-cli.exe",
+          "sha256": "66dc4ca621948bd7dec03e237443ae7981e7214af90add62a080e6394935757a"
+        },
+        {
+          "name": "whisper.dll",
+          "sha256": "a92c265ff8ffa9df9ea17458653d6aa120fefd069918985991549087daad40e6"
+        }
+      ]
+    }
+  }
+}

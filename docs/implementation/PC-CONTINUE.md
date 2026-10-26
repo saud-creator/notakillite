@@ -3,6 +3,16 @@
 Repository: https://github.com/saud-creator/notakillite
 Branch: codex/desktop-lecture-pipeline-20261026-8c9fb91
 
+## Current physical-PC state, 26 October 2026
+
+Resume from the [Windows report](WINDOWS-2026-10-26.md) and [delivery receipt](benchmarks/windows-delivery-acceptance.json). Dependencies, pinned models, SDK and engines are already installed in this checkout; do not repeat the initial setup or reset user data. Clean production source `a12a008` built the current `release/Notakillite.exe` (210,741,760 bytes; SHA-256 `78df0321a60192134f72a05ea8d62bfd0d875638eb675a2c31290113ac4585c8`). Later reporting-only commits do not change that code. Draft PR: https://github.com/saud-creator/notakillite/pull/1.
+
+CI run 40369164103 passed regression/native/Unicode/full-package acceptance: 109 passed, zero failed, one missing-Brave skip. The installed-Brave synthetic case passed locally. Final local CPU/MX350 native tests and eight headless jobs from the extracted EXE passed. Models Tiny/turbo are verified in both `.local/models` and the ordinary application cache. Checksums, license/component inventory and QA JSON are beside the EXE. It remains unsigned.
+
+The user requested background tests while using the computer. Do not resume foreground interaction until the desktop is available. The isolated fault-test app may remain minimized; it uses `.local/windows-20261026/fault-data`, not the normal user profile. A slow/failing-save/close scenario was interrupted by manual activity and is inconclusive. Finish that scenario, owner shutdown, navigation, candidates/export and retry cancellation when interaction is possible.
+
+The original 41:55 local recording/PDF has not undergone full turbo transcription in this continuation. Available RAM fell to about 1.3–2.2 GB; the configured policy requires about 5.2 GB available. Do not bypass readiness or close unrelated apps. Once sufficient memory is available, review and run the prepared ignored `.local/windows-20261026/measure-process-tree.ps1` with `.local/windows-20261026/run-private-case.mjs`/`private-case.json`. They use RNNoise, turbo, 4 threads, 60-second chunks, Vulkan and PDF bias off, block network access, support resumption and create five review exports plus SRT/VTT sidecars. Keep all private inputs/text/exports ignored. The sampler covers the owned CoreService/worker tree, excluding WPF and VRAM; do not call it a complete application memory measurement. CPU thread calibration, final NVIDIA turbo quality/performance screening, real-account Brave, Narrator/DPI, power/upgrade and signing gates remain open.
+
 ## First checkout (PowerShell)
 
 Install Git, GitHub CLI, Node.js 24 LTS and .NET 10 SDK. For native compilation, install Visual Studio 2022 Build Tools with Desktop development with C++, CMake, and the Windows SDK. Vulkan compilation additionally needs the Vulkan SDK version specified in .github/workflows/windows.yml. Reopen PowerShell after installing tools.
