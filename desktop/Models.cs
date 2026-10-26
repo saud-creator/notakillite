@@ -26,6 +26,7 @@ public class FolderModel : INotifyPropertyChanged
     public string ColorValue { get; init; } = "";
     public Brush Color { get { try { if (ColorValue.StartsWith('#')) return new SolidColorBrush((Color)ColorConverter.ConvertFromString(ColorValue)); } catch { } return (Brush)System.Windows.Application.Current.FindResource("AccentBrush"); } }
     public string CountLabel => NoteIds.Length > 0 ? NoteIds.Length.ToString() : "";
+    public override string ToString() => Title;
 }
 public class NoteModel
 {
@@ -40,6 +41,7 @@ public class NoteModel
     public string Duration { get { var seconds = Value.Get("recordings").Rows().Sum(item => double.TryParse(item.Text("duration"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : 0); return seconds > 0 ? MainWindow.FormatDuration(seconds) : ""; } }
     public string Icon => HasAudio ? "♫" : "▤";
     public FlowDirection Direction => Title.Length > 0 && Title.Any(c => c >= '\u0600' && c <= '\u06ff') ? FlowDirection.RightToLeft : FlowDirection.LeftToRight;
+    public override string ToString() => Title;
 }
 public class RecordingModel : INotifyPropertyChanged
 {
@@ -49,6 +51,7 @@ public class RecordingModel : INotifyPropertyChanged
     public bool Selected { get => selected; set { if (selected != value) { selected = value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Selected))); } } }
     public double Seconds { get; init; }
     public string Duration => MainWindow.FormatDuration(Seconds);
+    public override string ToString() => Name;
     public event PropertyChangedEventHandler? PropertyChanged;
 }
 public class JobModel
@@ -58,7 +61,8 @@ public class JobModel
     public string Title => Value.Text("title");
     public string Recording => Value.Text("recordingName");
     public string Status => Value.Text("status");
-    public string Phase => Value.Text("phase");
+    public string Phase => Value.Text("phase") + (double.TryParse(Value.Text("etaSeconds"),System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out var eta) && eta>0 ? $" · ~{Math.Ceiling(eta/60)} min left" : "");
+    public override string ToString() => $"{Title} · {Phase}";
     public string Error => Value.Text("error");
     public string Engine => (Value.Get("options").Text("engine") switch { "deepfilter" => "DeepFilterNet3", "rnnoise" => "RNNoise", "hybrid" => "Both engines", "none" => "Original", _ => "Light cleanup" }) + (Value.Get("options").Bool("transcribe") ? Value.Get("options").Text("transcriber") == "groq" ? " · Groq transcript" : " · Whisper transcript" : "");
     public bool HasTranscript => Status is "done" or "needs-review" && Value.Text("transcriptPath").Length > 0;
@@ -67,6 +71,8 @@ public class JobModel
     public double Progress => double.TryParse(Value.Text("fraction"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var progress) ? progress * 100 : 0;
     public bool Indeterminate => Status == "running" && Value.Get("fraction").ValueKind != JsonValueKind.Number;
     public string Badge => Status switch { "done" => "✓", "running" => "●", "queued" => "◷", "cancelled" => "−", "needs-review" => "⚠", _ => "!" };
+    public bool CanPause => Status is "queued" or "running";
+    public bool IsPaused => Status == "paused";
     public bool CanCancel => Status is "queued" or "running";
     public bool CanRetry => Status is "error" or "interrupted" or "cancelled" or "needs-review";
     public bool CanPlay => Status is "done" or "needs-review" && Value.Get("files").Rows().Any();

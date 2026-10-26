@@ -27,7 +27,7 @@ function rms(samples, start, end) {
 }
 function noiseRatio(samples) { return rms(samples, samples.length - 19200, samples.length - 4800) / rms(samples, 24000, samples.length - 24000); }
 
-test('real engines clean spoken M4A AAC/ALAC, preserve length, and reduce noise relative to speech', { timeout: 240000 }, async t => {
+test('real engines clean spoken M4A AAC/ALAC, preserve length, and reduce noise relative to speech', { timeout: 240000, skip:process.platform !== 'win32' && 'DeepFilterNet3 Windows runtime required' }, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'notakillite-engines-'));
   t.after(async () => { assert.ok(path.basename(directory).startsWith('notakillite-engines-')); await rm(directory, { recursive: true, force: true }); });
   const noisy = path.join(directory, 'noisy.wav');
@@ -41,7 +41,7 @@ test('real engines clean spoken M4A AAC/ALAC, preserve length, and reduce noise 
     // Input deliberately has no extension, matching Notability's upload path.
     const rawUpload = path.join(directory, 'source.audio');
     await writeFile(rawUpload, await readFile(input));
-    for (const engine of ['rnnoise', 'deepfilter', 'hybrid']) {
+    for (const engine of process.platform === 'win32' ? ['rnnoise','deepfilter','hybrid'] : ['rnnoise']) {
       const destination = path.join(directory, `${codec}-${engine}`);
       const manifest = await processAudio({ ffmpeg, input: rawUpload, destination, metadata: { title: 'Generated speech QA', recordingName: `${codec}.m4a`, clean: true, engine, strength: 'balanced', splitMinutes: 0 } });
       assert.equal(manifest.noiseReductionEngine, engine);
@@ -65,7 +65,7 @@ test('other common containers decode through both neural engines', { timeout: 18
   for (const [extension, codec] of formats) {
     const input = path.join(directory, `recording.${extension}`);
     await runTool(ffmpeg, [...base, '-i', fileURLToPath(speech), '-t', '1.137', '-ac', '2', '-ar', codec === 'libopus' ? '48000' : '44100', '-c:a', codec, input]);
-    for (const engine of ['rnnoise', 'deepfilter']) {
+    for (const engine of process.platform === 'win32' ? ['rnnoise','deepfilter'] : ['rnnoise']) {
       const destination = path.join(directory, `${extension}-${engine}`);
       const manifest = await processAudio({ ffmpeg, input, destination, metadata: { title: 'Format QA', recordingName: extension, clean: true, engine, strength: 'strong', splitMinutes: 0 } });
       assert.equal(manifest.files.length, 1);
@@ -75,7 +75,7 @@ test('other common containers decode through both neural engines', { timeout: 18
   }
 });
 
-test('long DeepFilterNet exports retain exact core samples across overlapping chunks and clean temporary files', { timeout: 240000 }, async t => {
+test('long DeepFilterNet exports retain exact core samples across overlapping chunks and clean temporary files', { timeout: 240000, skip:process.platform !== 'win32' && 'DeepFilterNet3 Windows runtime required' }, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'notakillite-long-'));
   t.after(async () => { assert.ok(path.basename(directory).startsWith('notakillite-long-')); await rm(directory, { recursive: true, force: true }); });
   const input = path.join(directory, 'long.wav');
@@ -97,7 +97,7 @@ test('model paths with spaces, apostrophes and Unicode work after Windows extrac
     assets[name] = path.join(directory, path.basename(file));
     await copyFile(file, assets[name]);
   }
-  for (const engine of ['rnnoise', 'deepfilter']) {
+  for (const engine of process.platform === 'win32' ? ['rnnoise','deepfilter'] : ['rnnoise']) {
     const manifest = await processAudio({ ffmpeg, input: fileURLToPath(speech), destination: path.join(directory, engine), metadata: { title: 'Path QA', recordingName: 'Speech', clean: true, engine, splitMinutes: 0 } });
     assert.equal(manifest.files.length, 1);
   }

@@ -1,0 +1,71 @@
+{
+  "fixtures": [
+    {
+      "id": "en_us-1904",
+      "audio": "en_us-1003119935936341070.wav",
+      "language": "en",
+      "reference": "However, due to the slow communication channels, styles in the west could lag behind by 25 to 30 year.",
+      "referenceVerified": true,
+      "referenceOrigin": "FLEURS public human transcription; no independent spot check",
+      "sha256": "33aca50159ec2e3cbcc894eb26faa916d6badb1b49fb75994973561540a7f012",
+      "source": "google/fleurs",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "split": "test",
+      "tuningAllowed": false
+    },
+    {
+      "id": "en_us-1675",
+      "audio": "en_us-10052240106321793346.wav",
+      "language": "en",
+      "reference": "All nouns, alongside the word Sie for you, always begin with a capital letter, even in the middle of a sentence.",
+      "referenceVerified": true,
+      "referenceOrigin": "FLEURS public human transcription; no independent spot check",
+      "sha256": "7603cae3294309ef70d234180cefccc3b13865ee525262228a636069b9b62841",
+      "source": "google/fleurs",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "split": "test",
+      "tuningAllowed": false
+    },
+    {
+      "id": "ar_eg-1993",
+      "audio": "ar_eg-10019390257075855641.wav",
+      "language": "ar",
+      "reference": "تشكلت في المحيط الأطلسي اليوم عاشر عاصفة مُسماة لموسم الأعاصير الأطلسية، العاصفة شبه الاستوائية جيري.",
+      "referenceVerified": true,
+      "referenceOrigin": "FLEURS public human transcription; no independent spot check",
+      "sha256": "40d979a6239fc08951f387c671fb5fc46fffdc5df823ed1dbdb809bc75e26620",
+      "source": "google/fleurs",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "split": "test",
+      "tuningAllowed": false
+    },
+    {
+      "id": "ar_eg-1730",
+      "audio": "ar_eg-10035416633083120372.wav",
+      "language": "ar",
+      "reference": "تغادر الحافلات المحطة الداخلية بين المناطق (عبر النهر) في خلال اليوم على الرغم من أن معظمها وخاصة المتجهة منها إلى الشرق وجاكار/بومثانج تغادر بين 06:30 و 07:30.",
+      "referenceVerified": true,
+      "referenceOrigin": "FLEURS public human transcription; no independent spot check",
+      "sha256": "318e95704f15e5050d5f3703172415c5e9d7f83495c3589590e8c4ca8b2628f6",
+      "source": "google/fleurs",
+      "revision": "70bb2e84b976b7e960aa89f1c648e09c59f894dd",
+      "license": "CC-BY-4.0",
+      "split": "test",
+      "tuningAllowed": false
+    }
+  ],
+  "profiles": [
+    {
+      "id": "turbo-persistent-cpu",
+      "options": {
+        "model": "turbo",
+        "chunkSeconds": 0,
+        "backend": "cpu"
+      }
+    }
+  ],
+  "preparation": "python scripts/import-fleurs.py .local/fleurs 2 70bb2e84b976b7e960aa89f1c648e09c59f894dd"
+}

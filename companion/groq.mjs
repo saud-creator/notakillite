@@ -71,7 +71,7 @@ const sleep = (ms, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener('abort', () => { clearTimeout(timer); reject(new DOMException('Export cancelled.', 'AbortError')); }, { once: true });
 });
 
-export async function groqRequest({ file, key, model, language, prompt, signal, fetchImpl = fetch, attempts = 6 }) {
+export async function groqRequest({ file, key, model, language, prompt, signal, fetchImpl = fetch, attempts = 6, requestTimeoutMs = 120000 }) {
   for (let attempt = 1; ; attempt++) {
     const form = new FormData();
     form.append('file', await openAsBlob(file), path.basename(file));
@@ -81,7 +81,7 @@ export async function groqRequest({ file, key, model, language, prompt, signal, 
     if (language && language !== 'auto') form.append('language', language);
     if (prompt) form.append('prompt', prompt.slice(0, 600));
     let response;
-    try { response = await fetchImpl(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal }); }
+    try { response = await fetchImpl(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${key}` }, body: form, signal:signal?AbortSignal.any([signal,AbortSignal.timeout(requestTimeoutMs)]):AbortSignal.timeout(requestTimeoutMs) }); }
     catch (error) { if (signal?.aborted || attempt >= attempts) throw signal?.aborted ? error : new Error('Could not reach Groq. Check your internet connection, or use Whisper on this PC.'); await sleep(2000 * attempt, signal); continue; }
     if (response.ok) return response.json();
     if (response.status === 401 || response.status === 403) throw new Error('Groq rejected the API key. Paste a valid key in Settings → Groq API key.');

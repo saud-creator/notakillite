@@ -20,12 +20,15 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { CoreService } from '../core/service.mjs';
 
 const args = process.argv.slice(2);
-const files = [], flags = {};
+const files = [], flags = {}, pdfs = [];
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
   if (arg === '--help' || arg === '-h') { console.log((await import('node:fs')).readFileSync(new URL(import.meta.url), 'utf8').split('\n').slice(1, 17).map(line => line.replace(/^\/\/ ?/, '')).join('\n')); process.exit(0); }
   if (arg === '--no-transcript') flags.transcribe = false;
   else if (arg === '--no-prompt') flags.aiPrompt = false;
+  else if (arg === '--experimental-pdf-bias') flags.pdfBias=true;
+  else if (arg === '--ocr') flags.ocr=true;
+  else if (arg === '--pdf') pdfs.push(path.resolve(args[++i]));
   else if (arg.startsWith('--')) flags[arg.slice(2)] = args[++i];
   else files.push(path.resolve(arg));
 }
@@ -40,7 +43,7 @@ let exitCode = 0;
 try {
   if (process.env.GROQ_API_KEY) await service.handle('secrets', { groqKey: process.env.GROQ_API_KEY });
   if (flags.out) service.savePreferences({ outputPath: path.resolve(flags.out) });
-  const { ids } = await service.enqueue({ files, engine: flags.cleanup || 'deepfilter', splitMinutes: 0, transcribe: flags.transcribe ?? true, transcriber: flags.engine || 'local', language: flags.language || 'auto', model: flags.model || 'turbo', transcribeFrom: flags.from || 'cleaned', vocabulary: flags.vocabulary || '', aiPrompt: flags.aiPrompt ?? true });
+  const { ids } = await service.enqueue({ files, pdfs, pdfBias:flags.pdfBias || false, ocr:flags.ocr || false, resourcePolicy: flags.resources || 'auto', threads: Number(flags.threads || 0), workers: Number(flags.workers || 1), backend: flags.backend || 'auto', chunkSeconds: Number(flags['chunk-seconds'] ?? 60), engine: flags.cleanup || 'deepfilter', splitMinutes: 0, transcribe: flags.transcribe ?? true, transcriber: flags.engine || 'local', language: flags.language || 'auto', model: flags.model || 'turbo', transcribeFrom: flags.from || 'cleaned', vocabulary: flags.vocabulary || '', aiPrompt: flags.aiPrompt ?? true });
   console.log(`Queued ${ids.length} recording${ids.length === 1 ? '' : 's'}.`);
   const seen = new Map();
   for (;;) {

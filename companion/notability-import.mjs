@@ -2,14 +2,16 @@
 // into an ordered list of recordings. A .note export is a ZIP archive whose Recordings
 // folder holds the audio; "PDF + Recording" exports are plain ZIPs with .m4a files.
 import { createReadStream, createWriteStream } from 'node:fs';
-import { open, readdir, stat } from 'node:fs/promises';
+import { open, readdir, stat, rm } from 'node:fs/promises';
 import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import { createInflateRaw } from 'node:zlib';
 import path from 'node:path';
 
 const AUDIO_EXTENSIONS = new Set(['.m4a', '.mp3', '.wav', '.aac', '.alac', '.flac', '.ogg', '.oga', '.opus', '.webm', '.caf', '.aif', '.aiff', '.wma', '.amr', '.mp4', '.3gp', '.audio']);
 const ARCHIVE_EXTENSIONS = new Set(['.note', '.zip']);
 const MAX_ENTRIES = 20000;
+export const ARCHIVE_LIMITS = { directoryBytes: 32 * 1024 ** 2, entryBytes: 2 * 1024 ** 3, totalBytes: 8 * 1024 ** 3, ratio: 1000 };
 
 export const naturalCompare = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
@@ -26,18 +28,23 @@ export async function zipEntries(file) {
     if (end < 0) throw new Error('This file is not a Notability note or ZIP archive.');
     const count = tail.readUInt16LE(end + 10), directorySize = tail.readUInt32LE(end + 12), directoryOffset = tail.readUInt32LE(end + 16);
     if (count === 0xffff || directoryOffset === 0xffffffff) throw new Error('This archive is too large to import. Export the note again with fewer recordings.');
-    if (count > MAX_ENTRIES || directoryOffset + directorySize > size) throw new Error('This archive is damaged.');
+    if (directorySize > ARCHIVE_LIMITS.directoryBytes || count > MAX_ENTRIES || directoryOffset + directorySize > size) throw new Error('This archive is damaged.');
     const directory = Buffer.alloc(directorySize);
     await handle.read(directory, 0, directorySize, directoryOffset);
-    const entries = [];
+    const entries = []; let expanded = 0;
     for (let offset = 0, index = 0; index < count; index++) {
+      if (offset + 46 > directory.length) throw new Error('This archive is damaged.');
       if (directory.readUInt32LE(offset) !== 0x02014b50) throw new Error('This archive is damaged.');
       const flags = directory.readUInt16LE(offset + 8), method = directory.readUInt16LE(offset + 10);
       const compressedSize = directory.readUInt32LE(offset + 20), uncompressedSize = directory.readUInt32LE(offset + 24);
       const nameLength = directory.readUInt16LE(offset + 28), extraLength = directory.readUInt16LE(offset + 30), commentLength = directory.readUInt16LE(offset + 32);
       const localOffset = directory.readUInt32LE(offset + 42);
+      if (offset + 46 + nameLength + extraLength + commentLength > directory.length) throw new Error('This archive is damaged.');
+      expanded += uncompressedSize;
+      if (uncompressedSize > ARCHIVE_LIMITS.entryBytes || expanded > ARCHIVE_LIMITS.totalBytes || uncompressedSize > Math.max(1, compressedSize) * ARCHIVE_LIMITS.ratio) throw new Error('Archive expansion limit exceeded.');
       const raw = directory.subarray(offset + 46, offset + 46 + nameLength);
       const name = (flags & 0x800 ? raw.toString('utf8') : raw.toString('latin1')).replaceAll('\\', '/');
+      if (name.startsWith('/') || /^[a-z]:/i.test(name) || name.split('/').includes('..')) throw new Error('Unsafe archive path.');
       offset += 46 + nameLength + extraLength + commentLength;
       if (name.endsWith('/') || name.startsWith('__MACOSX/') || path.posix.basename(name).startsWith('._')) continue;
       entries.push({ name, method, flags, compressedSize, uncompressedSize, localOffset });
@@ -74,8 +81,10 @@ export async function extractEntry(file, entry, destination, { signal } = {}) {
   const start = await entryDataOffset(file, entry);
   const stages = [createReadStream(file, { start, end: start + entry.compressedSize - 1 })];
   if (entry.method === 8) stages.push(createInflateRaw());
+  let received = 0;
+  stages.push(new Transform({ transform(chunk, encoding, done) { received += chunk.length; done(received > Math.min(entry.uncompressedSize, ARCHIVE_LIMITS.entryBytes) ? new Error('Archive expansion limit exceeded.') : null, chunk); } }));
   stages.push(createWriteStream(destination));
-  await pipeline(stages, { signal });
+  try { await pipeline(stages, { signal }); } catch(e) { await rm(destination, { force: true }); throw e; }
   const written = (await stat(destination)).size;
   if (written !== entry.uncompressedSize) throw new Error('The recording inside this note is incomplete. Export the note again.');
 }

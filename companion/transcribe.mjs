@@ -2,6 +2,10 @@
 // parts that fail — from the source audio, never by guessing or deleting text.
 // Background: docs/transcription-reliability.md (P0 repetition-loop incident).
 import path from 'node:path';
+import { hasPersistentWorker } from './persistent-whisper.mjs';
+import { capabilities, resourcePlan, inferenceExecutionLimit } from '../core/resource-policy.mjs';
+import { transcribeChunks, recoveryWindows, chunkWindows } from './chunk-pipeline.mjs';
+import { retrieveContext } from './lecture-context.mjs';
 import { createHash } from 'node:crypto';
 import { open, writeFile, rm, stat } from 'node:fs/promises';
 import { runTool } from './audio.mjs';
@@ -14,7 +18,7 @@ import { auditTranscript, piecesFor, normalize, qualityScore, isKnownArtifact } 
 const exists = file => access(file).then(() => true, () => false);
 
 export const TRANSCRIBER_NAMES = { local: 'Whisper on this PC', groq: 'Groq Whisper (cloud)' };
-export const RECOVERY = Object.freeze({ pieceSeconds: 300, maxAttemptsPerPiece: 4, budgetShare: 1 }); // retries may re-process at most the lecture's length once more
+export const RECOVERY = Object.freeze({ pieceSeconds: 300, maxAttemptsPerPiece: 3, budgetShare: 1 }); // retries may re-process at most the lecture's length once more
 
 /** Decodes one or more consecutive audio files into a single 16 kHz mono WAV for Whisper. */
 export async function speechWav({ ffmpeg, inputs, work, signal, name = 'speech-16k.wav' }) {
@@ -103,7 +107,7 @@ const wordCount = segments => segments.reduce((sum, s) => sum + (s.marker ? 0 : 
  * { language, segments, engine, model, device, duration, quality: { status, findings, repairs, unresolved, attempts } }.
  * quality.status: 'ok' | 'repaired' | 'needs-review'.
  */
-export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, options, secrets = {}, modelsDir, signal, onStage = () => {}, fetchImpl, log = () => {}, runner, config }) {
+export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, options, secrets = {}, modelsDir, signal, onStage = () => {}, fetchImpl, log = () => {}, runner, config, checkpointDir, context, modelResolver }) {
   onStage({ phase: 'Preparing audio for transcription', fraction: 0 });
   const { wav, duration } = await speechWav({ ffmpeg, inputs, work, signal });
   log({ event: 'source', role: originalInputs ? 'cleaned' : 'original', duration: Math.round(duration * 1000) / 1000, sampleRate: 16000, channels: 1 });
@@ -119,11 +123,25 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
 
   // First pass.
   const groq = options.transcriber === 'groq';
-  const common = { ffmpeg, wav, duration, model: options.model, language: options.language, vocabulary: options.vocabulary, work, signal, runTool, fetchImpl };
-  const first = groq
+  const initialContext=options.pdfBias ? retrieveContext(context,'') : {vocabulary:''};
+  const vocabulary=[options.vocabulary,initialContext.vocabulary].filter(Boolean).join(', ').slice(0,600);
+  const common = { ffmpeg, wav, duration, model: options.model, language: options.language, vocabulary, work, signal, runTool, fetchImpl, modelResolver };
+  const chunked = !groq && options.chunkSeconds !== 0 && duration > (options.chunkSeconds || 60);
+  const persistentWorkerAvailable = chunked && !runner && await hasPersistentWorker(options.backend);
+  const availableChunks = chunked ? chunkWindows(duration, silences, options.chunkSeconds || 60).length : 1;
+  const executionLimit = inferenceExecutionLimit({ chunked, persistentWorkerAvailable, availableChunks });
+  const resource = resourcePlan(await capabilities(), options, WHISPER_MODELS[options.model]?.bytes, executionLimit);
+  log({ event: 'resources', ...resource });
+  if (resource.insufficientMemory && !runner) throw new Error('Not enough available RAM for the selected model. Free memory or explicitly choose a smaller model.');
+  const first = chunked
+    ? await transcribeChunks({ wav, duration, silences, work, checkpointDir, options, resource, context, signal, log,
+      cut: (target, start, end) => cutWav({ ffmpeg, wav, start, end, target, signal }),
+      decode: (file, seconds, opts, index) => transcribeLocal({ ...common, wav: file, duration: seconds, modelsDir, work, threads: opts.threads, backend: opts.backend, name: `chunk-${index}`, vocabulary: opts.vocabulary, ...(runner ? { runner } : {}) }),
+      onProgress: onStage })
+    : groq
     ? await transcribeGroq({ ...common, key: secrets.groqKey, onStage: stage => onStage({ ...stage, fraction: stage.fraction * 0.8 }) })
-    : await transcribeLocal({ ...common, modelsDir, onStage: stage => onStage({ ...stage, fraction: Math.min(0.8, stage.fraction) }), ...(runner ? { runner } : {}) });
-  log({ event: 'decode', engine: first.engine, model: first.model, device: first.device, language: first.language,
+    : await transcribeLocal({ ...common, modelsDir, threads: resource.threads, backend: options.backend, onStage: stage => onStage({ ...stage, fraction: Math.min(0.8, stage.fraction) }), ...(runner ? { runner } : {}) });
+  log({ event: 'decode', nativeMetrics:first.nativeMetrics, engine: first.engine, model: first.model, device: first.device, backendName:first.backendName, deviceName:first.deviceName, language: first.language,
     settings: first.settings ? { language: first.settings.language, vad: first.settings.vad, prompt: Boolean(first.settings.prompt), textContextFedBack: false } : { chunked: '10 min', textContextFedBack: false } });
 
   // Known Whisper artifacts (e.g. "Subtitles by the Amara.org community") are removed from whole
@@ -146,7 +164,7 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
     };
     const budget = duration * RECOVERY.budgetShare;
     let spent = 0;
-    const failing = report.pieces.filter(p => !p.ok);
+    const failing = recoveryWindows(report.findings, report.pieces, duration, 3, segments);
     for (const [n, piece] of failing.entries()) {
       signal?.throwIfAborted();
       const span = piece.end - piece.start;
@@ -154,7 +172,7 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
       const current = within(segments, piece);
       let best = { strategy: 'first-pass', segments: current, audit: pieceAudit(current) };
       best.score = qualityScore(best.audit);
-      const strategies = recoveryStrategies({ first, groq, options, secrets, modelsDir, ffmpeg, wav, getOriginal, hasOriginal: async () => Boolean(originalInputs?.length), piece, speech, work, signal, fetchImpl, runner });
+      const strategies = recoveryStrategies({ first, groq, options, secrets, modelsDir, ffmpeg, wav, context, getOriginal, hasOriginal: async () => Boolean(originalInputs?.length), piece, speech, work, signal, fetchImpl, runner });
       let tries = 0;
       for (const strategy of strategies) {
         if (tries >= RECOVERY.maxAttemptsPerPiece || spent + span > budget) break;
@@ -169,7 +187,7 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
         const score = audit ? qualityScore(audit) : -1;
         const entry = { piece: piece.index, start: +piece.start.toFixed(1), end: +piece.end.toFixed(1), strategy: strategy.name, status: audit?.status || 'error', score: +score.toFixed(3), words: candidate ? wordCount(candidate) : 0, error };
         attempts.push(entry); log({ event: 'retry', ...entry });
-        if (candidate && (score > best.score || (audit.status === 'ok' && best.audit.status !== 'ok'))) best = { strategy: strategy.name, segments: candidate, audit, score, removed };
+        if (candidate && (score > best.score || (score === best.score && best.strategy === 'first-pass' && audit.status === 'ok') || (audit.status === 'ok' && best.audit.status !== 'ok'))) best = { strategy: strategy.name, segments: candidate, audit, score, removed };
         if (audit?.status === 'ok') break;
       }
       segments = assemble([...without(segments, piece), ...best.segments], log);
@@ -185,36 +203,63 @@ export async function transcribeAudio({ ffmpeg, inputs, originalInputs, work, op
     }
   }
 
-  // Parts that could not be repaired: keep everything outside the bad intervals, replace the bad
-  // intervals with a visible marker. Never a guessed continuation.
-  for (const part of unresolved) {
-    const bad = mergeIntervals(part.findings.map(f => ({ start: Math.max(part.start, f.start), end: Math.min(part.end, Math.max(f.end, f.start + 1)) })));
-    for (const interval of bad) {
-      segments = segments.filter(s => s.marker || s.end <= interval.start || s.start >= interval.end);
-      segments.push({ start: interval.start, end: interval.end, marker: true, text: `Not reliably transcribed (${timeLabel(interval.start)}–${timeLabel(interval.end)}) — check the audio. Reason: ${part.reasons.join(', ')}.` });
-    }
+  // Audit the merged candidate before masking unresolved passages. This catches new cross-window
+  // findings while avoiding false missing-text findings caused by the review markers themselves.
+  const mergedAudit = auditTranscript(segments.filter(s => !s.marker), { duration, pieces, speech, config });
+  for (const finding of mergedAudit.findings) addUnresolvedFinding(unresolved, finding);
+
+  // Keep everything outside bad intervals and replace each merged interval with one visible marker.
+  // Never fill a gap with a guess, and never let duplicate findings create duplicate markers.
+  const bad = mergeIntervals(unresolved.flatMap(part => (part.findings || []).map(f => ({
+    start: Math.max(0, f.start - 3), end: Math.min(duration, Math.max(f.end, f.start + 1) + 3), reasons: [f.kind],
+  }))));
+  for (const interval of bad) {
+    segments = segments.filter(s => s.marker || s.end <= interval.start || s.start >= interval.end);
+    segments.push({ start: interval.start, end: interval.end, marker: true, text: `Not reliably transcribed (${timeLabel(interval.start)}–${timeLabel(interval.end)}) — check the audio. Reason: ${interval.reasons.join(', ')}.` });
   }
   segments = assemble(segments, log);
   for (let i = 1; i < segments.length; i++) if (segments[i].start < segments[i - 1].start) throw new Error('Internal error: transcript segments are out of order.');
 
   const final = auditTranscript(segments.filter(s => !s.marker), { duration, pieces, speech, config });
-  const status = unresolved.length ? 'needs-review' : repairs.length ? 'repaired' : 'ok';
+  const status = unresolved.length || final.status !== 'ok' ? 'needs-review' : repairs.length ? 'repaired' : 'ok';
   log({ event: 'quality', status, finalAudit: final.status, repairs: repairs.length, unresolved: unresolved.length, attempts: attempts.length, words: wordCount(segments) });
   onStage({ phase: 'Quality check complete', fraction: 1 });
   return {
-    language: first.language, model: first.model, device: first.device, engine: first.engine, duration, segments,
-    quality: { status, repairs, unresolved: unresolved.map(({ findings, ...u }) => u), attempts, findings: report.findings, artifactsRemoved: artifacts.length },
+    rawSegments: first.segments, contextSources: context?.sources || [], resources: resource,
+    language: first.language, model: first.model, device: first.device, backendName:first.backendName, deviceName:first.deviceName, engine: first.engine, duration, segments: segments.map(s=>({...s,pdfReferences:retrieveContext(context,s.text).references})),
+    quality: { status, finalAudit: final, repairs, unresolved: unresolved.map(({ findings, ...u }) => u), attempts, findings: report.findings, artifactsRemoved: artifacts.length },
   };
 }
 
 function mergeIntervals(list) {
   const sorted = [...list].sort((a, b) => a.start - b.start), out = [];
-  for (const x of sorted) { const last = out.at(-1); if (last && x.start <= last.end + 5) last.end = Math.max(last.end, x.end); else out.push({ ...x }); }
+  for (const x of sorted) {
+    const last = out.at(-1);
+    if (last && x.start <= last.end + 5) {
+      last.end = Math.max(last.end, x.end);
+      last.reasons = [...new Set([...(last.reasons || []), ...(x.reasons || [])])];
+    } else out.push({ ...x, reasons: [...(x.reasons || [])] });
+  }
   return out;
 }
 
+function addUnresolvedFinding(unresolved, finding) {
+  const matches = unresolved.filter(item => finding.start <= item.end && finding.end >= item.start);
+  if (!matches.length) {
+    unresolved.push({ start: finding.start, end: finding.end, reasons: [finding.kind], findings: [finding] });
+    return;
+  }
+  const target = matches[0];
+  const findings = [...matches.flatMap(item => item.findings || []), finding];
+  target.start = Math.min(finding.start, ...matches.map(item => item.start));
+  target.end = Math.max(finding.end, ...matches.map(item => item.end));
+  target.reasons = [...new Set([...matches.flatMap(item => item.reasons || []), finding.kind])];
+  target.findings = [...new Map(findings.map(item => [`${item.kind}:${item.start}:${item.end}`, item])).values()];
+  for (const item of matches.slice(1)) unresolved.splice(unresolved.indexOf(item), 1);
+}
+
 /** Ordered retry strategies for one piece. Each returns segments with absolute timestamps. */
-export function recoveryStrategies({ first, groq, options, secrets, modelsDir, ffmpeg, wav, getOriginal, hasOriginal = async () => false, piece, speech, work, signal, fetchImpl, runner }) {
+export function recoveryStrategies({ first, groq, options, secrets, modelsDir, ffmpeg, wav, context, getOriginal, hasOriginal = async () => false, piece, speech, work, signal, fetchImpl, runner }) {
   const list = [];
   const tag = `p${piece.index}`;
   const cut = async (source, start = piece.start, end = piece.end, name = tag) => cutWav({ ffmpeg, wav: source, start, end, target: path.join(work, `retry-${name}.wav`), signal });
@@ -230,9 +275,9 @@ export function recoveryStrategies({ first, groq, options, secrets, modelsDir, f
       const file = await cut(source, start, end, name);
       try {
         // Re-detect the language for this part when the lecture language is Auto (code-switching).
-        const language = options.language === 'auto' ? await detectLanguage({ ffmpeg, wav: file, duration: end - start, model: modelFile, work, signal, runTool, ...(runner ? { runner } : {}) }) : s.language;
-        const pass = await whisperPass({ modelFile, wav: file, language, prompt: s.prompt, vad, work, name: `retry-${name}`, signal, only, ...(runner ? { runner } : {}) });
-        return shift(pass.segments, start);
+        const language = options.language === 'auto' && !(await hasPersistentWorker(options.backend)) ? await detectLanguage({ ffmpeg, wav: file, duration: end - start, model: modelFile, work, signal, runTool, ...(runner ? { runner } : {}) }) : s.language;
+        const pass = await whisperPass({ modelFile, wav: file, language, prompt: [s.prompt, (options.pdfBias ? retrieveContext(context, within(first.segments, piece).map(s => s.text).join(' ')).vocabulary : '')].filter(Boolean).join(', ').slice(0,600), vad, work, name: `retry-${name}`, signal, only, threadCount: Math.max(1,options.threads || 1), backend: options.backend, ...(runner ? { runner } : {}) });
+        return shift(pass.segments,start).filter(s=>s.start<end && s.end>start).map(s=>({...s,start:Math.max(start,s.start),end:Math.min(end,s.end)}));
       } finally { await rm(file, { force: true }); }
     };
     const turbo = modelPath(modelsDir, 'turbo');

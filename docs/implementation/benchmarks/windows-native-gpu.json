@@ -1,0 +1,123 @@
+{
+  "commit": "e13a02b8f41b2756761776c46f01487965b68b80",
+  "dirty": false,
+  "platform": "win32",
+  "os": "10.0.26300",
+  "node": "v24.20.0",
+  "workerSha256": "679ace05f9f6ab64e7ad41c2276be5213ecc6aecf45b2354b2cbe0bf279c5581",
+  "modelSha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+  "backend": "gpu-required",
+  "backendEvidence": [
+    "ggml_vulkan: Found 2 Vulkan devices:",
+    "ggml_vulkan: 0 = Intel(R) UHD Graphics 750 (Intel Corporation) | uma: 1 | fp16: 1 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 32768 | int dot: 1 | matrix cores: none",
+    "ggml_vulkan: 1 = NVIDIA GeForce MX350 (NVIDIA) | uma: 0 | fp16: 0 | bf16: 0 | fp4: 0 | warp size: 32 | shared memory: 49152 | int dot: 1 | matrix cores: none",
+    "load_backend: loaded Vulkan backend from <workspace>\\vendor\\whisper\\vulkan\\ggml-vulkan.dll",
+    "load_backend: loaded CPU backend from <workspace>\\vendor\\whisper\\vulkan\\ggml-cpu-cascadelake.dll",
+    "whisper_backend_init_gpu: device 0: Vulkan0 (type: 2)",
+    "whisper_backend_init_gpu: found GPU device 0: Vulkan0 (type: 2, cnt: 0)",
+    "whisper_backend_init_gpu: device 1: Vulkan1 (type: 1)",
+    "whisper_backend_init_gpu: found GPU device 1: Vulkan1 (type: 1, cnt: 1)",
+    "whisper_backend_init_gpu: using Vulkan1 backend",
+    "whisper_backend_init_gpu: no GPU found"
+  ],
+  "runs": [
+    {
+      "repeat": 0,
+      "wallMs": 344.8159999999998,
+      "device": "GPU",
+      "backendName": "Vulkan1",
+      "deviceName": "NVIDIA GeForce MX350",
+      "segments": 2,
+      "promptTokens": 4,
+      "inferenceMs": 343,
+      "workerPeakRssBytes": 185864192
+    },
+    {
+      "repeat": 1,
+      "wallMs": 287.01880000000006,
+      "device": "GPU",
+      "backendName": "Vulkan1",
+      "deviceName": "NVIDIA GeForce MX350",
+      "segments": 2,
+      "promptTokens": 4,
+      "inferenceMs": 286,
+      "workerPeakRssBytes": 185864192
+    }
+  ],
+  "measurementScope": "Native worker peak working set only; excludes the rest of the application.",
+  "libraries": [
+    {
+      "name": "ggml-base.dll",
+      "sha256": "2e94bca5281a53532b0535b2555b2fa7b01ad47c7ce653eff8e635da4f5d4e1b"
+    },
+    {
+      "name": "ggml-cpu-alderlake.dll",
+      "sha256": "6a461f918257ef56ca2d7a69fe46be1af6306068c62123b1e8aa0f5e176ae861"
+    },
+    {
+      "name": "ggml-cpu-cannonlake.dll",
+      "sha256": "1950d0585621a7fcaf0c147e538c73ad3abeb6ce20de71bd4e86f3c949f15f83"
+    },
+    {
+      "name": "ggml-cpu-cascadelake.dll",
+      "sha256": "bfa4b7ff2eb719996929b9e8246891e56f5dcc8cc7e0278d1776fcc6ef402e82"
+    },
+    {
+      "name": "ggml-cpu-haswell.dll",
+      "sha256": "b8269dc0b3dd3018837b3e02c4203cae42c039de3242b8d8acb745a14084e1e4"
+    },
+    {
+      "name": "ggml-cpu-icelake.dll",
+      "sha256": "02feae66fafdf39597361a58ca247889f0367f481ed8b0881b438e5d172feb18"
+    },
+    {
+      "name": "ggml-cpu-sandybridge.dll",
+      "sha256": "431e9b11cfc0ef6e5bc958d9fe6a164902188d6d94a5983cebaff72bdb52e1cd"
+    },
+    {
+      "name": "ggml-cpu-skylakex.dll",
+      "sha256": "a8e75e91286889b0e3e12b959996524983e2d80949f6ef38e6185c3ceff71878"
+    },
+    {
+      "name": "ggml-cpu-sse42.dll",
+      "sha256": "92e31e6031be57e4e4056f4e846240d2e7be1bf2c0b197948b4fbb7bd86688e9"
+    },
+    {
+      "name": "ggml-cpu-x64.dll",
+      "sha256": "4f72184a40cb16c6d0e5d2743919ab8a98c5ee554394ad5346306ae303f0beae"
+    },
+    {
+      "name": "ggml-vulkan.dll",
+      "sha256": "902bdcfda3817dc56ceb2130eb7470dfb115e4760dcf4203fe906586834d4d3b"
+    },
+    {
+      "name": "ggml.dll",
+      "sha256": "c5db17f903572c40640a280243a22c6620ed55409721a937a4ae78aee56aa51e"
+    },
+    {
+      "name": "whisper.dll",
+      "sha256": "2ff643ecb2de729251687511aa5d1e16286db3f98eef2b196c9bfde64b54a4fd"
+    }
+  ],
+  "coldLoadAndTokenizeMs": 707.6570999999999,
+  "vadToggle": {
+    "result": "passed",
+    "off": {
+      "applied": false,
+      "vadSegments": 0,
+      "decodedSegments": 2
+    },
+    "on": {
+      "applied": true,
+      "vadSegments": 2,
+      "decodedSegments": 2
+    }
+  },
+  "cancellationMs": 43.452400000000125,
+  "result": "passed",
+  "unicodePaths": "passed",
+  "retainedModel": "passed",
+  "tokenizerBudget": "passed",
+  "cancellationAndRestart": "passed",
+  "cacheAndLoadNotes": "Clean committed source; warmed driver shader cache. Package publication was running concurrently; these are acceptance observations, not controlled throughput comparisons."
+}

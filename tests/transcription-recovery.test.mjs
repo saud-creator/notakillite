@@ -49,8 +49,8 @@ function mockWhisper(behave) {
 }
 const normal = (duration, seed = 1) => lecture({ to: duration, seed });
 const looping = (duration, from = 0) => [...normal(Math.min(from, duration), 2), ...Array.from({ length: Math.floor((duration - from) / 2.3) }, (_, i) => ({ start: from + i * 2.3, end: from + i * 2.3 + 2.2, text: LOOP }))];
-const options = { transcriber: 'local', model: 'tiny', language: 'en', vocabulary: '' };
-const run = (ctx, runner, extra = {}) => transcribeAudio({ ffmpeg, inputs: [ctx.audio], originalInputs: [ctx.audio], work: ctx.jobWork, options, modelsDir: ctx.models, runner, ...extra });
+const options = { transcriber: 'local', model: 'tiny', language: 'en', vocabulary: '', chunkSeconds: 0 };
+const run = (ctx, runner, extra = {}) => transcribeAudio({ ffmpeg, inputs: [ctx.audio], originalInputs: [ctx.audio], work: ctx.jobWork, options, modelsDir: ctx.models, modelResolver: async (name,dir) => modelPath(dir,name), runner, ...extra });
 
 test('decoded text is never fed back: every Whisper run uses -mc 0 or a prompt-only context budget', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
   const ctx = await setup(t, 6);
@@ -66,6 +66,17 @@ test('decoded text is never fed back: every Whisper run uses -mc 0 or a prompt-o
   assert.equal(vocab.quality.status, 'ok');
 });
 
+test('the local speech-detection retry toggles the CLI VAD flag from the reported initial setting', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
+  const ctx = await setup(t, 6), log = [];
+  const { runner, calls } = mockWhisper(({ duration, call }) => call === 1 ? looping(duration, 60) : normal(duration, 70 + call));
+  const result = await run(ctx, runner, { log: event => log.push(event) });
+  assert.equal(log.find(event => event.event === 'decode')?.settings.vad, true, 'CLI initial-pass settings report VAD on.');
+  assert.ok(calls[0].args.includes('--vad'), 'the initial CLI pass uses its VAD-on default.');
+  assert.ok(result.quality.attempts.some(attempt => attempt.strategy === 'voice-detection-toggled'), JSON.stringify(result.quality.attempts));
+  const toggleIndex = calls.findIndex(call => !call.args.includes('--vad'));
+  assert.ok(toggleIndex > 0, 'the VAD retry removes --vad after observing an initial VAD-on CLI pass.');
+});
+
 test('a loop in the first pass is repaired from source audio; neighbouring parts stay unchanged', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
   const ctx = await setup(t, 16);
   const log = [];
@@ -78,7 +89,7 @@ test('a loop in the first pass is repaired from source audio; neighbouring parts
   const result = await run(ctx, runner, { log: e => log.push(e) });
   assert.equal(result.quality.status, 'repaired', JSON.stringify(result.quality));
   assert.ok(result.quality.repairs.length >= 1);
-  assert.equal(result.segments.filter(s => s.text === LOOP).length, 0);
+  assert.equal(result.segments.filter(s => s.text === LOOP).length, 0, JSON.stringify({left:result.segments.filter(s => s.text === LOOP), repairs:result.quality.repairs, attempts:result.quality.attempts}));
   // Text before the failing part is byte-identical to the first pass.
   const cutoff = Math.min(...result.quality.repairs.map(r => r.start));
   assert.ok(cutoff > 200, `first repaired part starts at ${cutoff}`);
@@ -98,6 +109,41 @@ test('a loop in the first pass is repaired from source audio; neighbouring parts
   assert.ok(calls.length < 12);
 });
 
+test('a final-only repetition crossing a repaired window gets a timed marker without losing trusted neighbors', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
+  const ctx = await setup(t, 6);
+  const repeated = 'The conjoint tendon is formed by the internal oblique and transversus abdominis.';
+  const before = 'This trusted statement remains before the flagged passage.';
+  const after = 'This trusted statement remains after the flagged passage.';
+  const { runner, calls } = mockWhisper(({ duration, file }) => {
+    if (file !== 'speech-16k.wav') return [{ start: 0.5, end: 3, text: repeated }];
+    return [...normal(duration, 31),
+      { start: 100, end: 103, text: before },
+      { start: 220, end: 223, text: repeated },
+      { start: 235, end: 238, text: repeated },
+      { start: 250, end: 250, text: 'first pass decoder glitch words here' },
+      { start: 265, end: 268, text: repeated },
+      { start: 320, end: 323, text: after },
+    ].sort((a, b) => a.start - b.start);
+  });
+  const result = await run(ctx, runner);
+  assert.equal(result.quality.status, 'needs-review');
+  assert.ok(result.quality.attempts.length > 0 && result.quality.attempts.length <= RECOVERY.maxAttemptsPerPiece);
+  assert.equal(result.quality.attempts[0].status, 'ok', 'the recovery candidate passes its local audit');
+  assert.equal(result.quality.repairs.length, 1);
+  assert.equal(result.quality.unresolved.length, 1, JSON.stringify(result.quality.unresolved));
+  assert.ok(result.quality.unresolved[0].reasons.includes('repeated-sentence'), JSON.stringify(result.quality.unresolved));
+  const marker = result.segments.find(s => s.marker && /Not reliably transcribed/.test(s.text));
+  assert.ok(marker, 'final merged finding must have a visible review marker');
+  assert.ok(marker.start <= 220 && marker.end >= 268, JSON.stringify({ marker, unresolved: result.quality.unresolved }));
+  assert.match(marker.text, /repeated-sentence/);
+  assert.match(marker.text, /\(\d{2}:\d{2}:\d{2}–\d{2}:\d{2}:\d{2}\)/, 'the review marker has a visible time range');
+  assert.ok(result.rawSegments.some(s => s.text === 'first pass decoder glitch words here'), 'raw ASR is retained');
+  assert.ok(result.segments.some(s => !s.marker && s.text === before), 'trusted text before the flagged interval stays');
+  assert.ok(result.segments.some(s => !s.marker && s.text === after), 'trusted text after the flagged interval stays');
+  assert.ok(!result.quality.finalAudit.findings.some(f => f.kind === 'repeated-sentence'), 'the marker removes the untrusted repeated text from the exported transcript');
+  assert.ok(calls.length <= 1 + RECOVERY.maxAttemptsPerPiece, `unexpected retries: ${calls.length}`);
+});
+
 test('retry exhaustion ends as needs-review with a visible marker and a bounded number of runs', { skip: !vadInstalled && 'vendor/whisper not installed' }, async t => {
   const ctx = await setup(t, 16);
   const { runner, calls } = mockWhisper(({ duration }) => looping(duration, Math.min(60, duration)));
@@ -106,7 +152,7 @@ test('retry exhaustion ends as needs-review with a visible marker and a bounded 
   assert.ok(result.quality.unresolved.length >= 1);
   const markers = result.segments.filter(s => s.marker);
   assert.ok(markers.length >= 1 && markers.every(m => /Not reliably transcribed/.test(m.text)));
-  assert.equal(result.segments.filter(s => !s.marker && s.text === LOOP).length, 0, 'corrupted text is not exported as transcript');
+  assert.ok(!auditTranscript(result.segments.filter(s=>!s.marker), {duration:960}).findings.some(f=>['repeated-sentence','internal-repetition','low-diversity'].includes(f.kind)), 'a repeated decoder loop is not exported; an isolated ordinary sentence is allowed');
   const pieces = Math.ceil(960 / RECOVERY.pieceSeconds) + 1;
   assert.ok(calls.length <= 1 + pieces * (RECOVERY.maxAttemptsPerPiece + 1), `${calls.length} runs`);
   const markdown = lectureMarkdown({ title: 'T', recording: 'R', sourceFile: 'S', duration: 960, cleanup: 'DeepFilterNet3', transcript: { ...result, model: 'Whisper tiny' }, quality: result.quality });
@@ -122,8 +168,8 @@ test('original audio is tried when the cleaned audio keeps failing, and the bett
   await runTool(ffmpeg, ['-y', '-i', ctx.audio, '-af', 'volume=0.9', original]);
   // Cleaned audio always loops; anything cut from the original audio transcribes cleanly.
   const { runner, calls } = mockWhisper(({ duration, file }) => file.includes('-original') ? normal(duration, 7) : looping(duration, 30));
-  const result = await transcribeAudio({ ffmpeg, inputs: [ctx.audio], originalInputs: [original], work: ctx.jobWork, options, modelsDir: ctx.models, runner });
-  assert.ok(calls.some(c => c.args.some(a => a.includes('-original'))), 'a retry used the original audio');
+  const result = await transcribeAudio({ ffmpeg, inputs: [ctx.audio], originalInputs: [original], work: ctx.jobWork, options, modelsDir: ctx.models, modelResolver: async (name,dir) => modelPath(dir,name), runner });
+  assert.ok(calls.some(c => c.args.some(a => a.includes('-original'))), 'a retry used the original audio: ' + JSON.stringify(result.quality.attempts));
   assert.ok(result.quality.repairs.some(r => r.strategy === 'original-audio'), JSON.stringify(result.quality.attempts));
   assert.ok((await readdir(ctx.jobWork)).includes('original-16k.wav'), 'the original audio is decoded for recovery');
 });
@@ -165,6 +211,6 @@ test('every case terminates within the recovery budget, even with an engine that
   const result = await run(ctx, async (...a) => { try { return await runner(...a); } catch (e) { return { code: 1, stderr: e.message }; } });
   assert.ok(['needs-review', 'repaired', 'ok'].includes(result.quality.status));
   const budgetRuns = result.quality.attempts.length;
-  assert.ok(budgetRuns <= Math.ceil(1800 * RECOVERY.budgetShare / 240) + 2, `${budgetRuns} attempts`);
+  assert.ok(result.quality.attempts.reduce((sum,a)=>sum+a.end-a.start,0) <= 1800 * RECOVERY.budgetShare + .1, `${budgetRuns} attempts exceeded audio budget`);
   assert.ok(Date.now() - started < 60000);
 });

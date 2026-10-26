@@ -1,0 +1,9 @@
+{
+  "workflow": "original CLI to CoreService, RNNoise, native tiny CPU, attached PDF, structured transcript and publication",
+  "passed": true,
+  "pdfPages": 20,
+  "suggestedTerms": 249,
+  "pdfAssistance": "review-suggestions",
+  "segmentCount": 2,
+  "quality": "ok"
+}

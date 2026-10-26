@@ -6,6 +6,9 @@ import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import os from 'node:os';
+import { atomicJson, hashFile } from '../core/artifacts.mjs';
+import { persistentPass, hasPersistentWorker } from './persistent-whisper.mjs';
+import { capabilities, resourcePlan } from '../core/resource-policy.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +18,7 @@ export const vadModel = path.join(whisperDir, 'ggml-silero-v6.2.0.bin');
 const exe = process.platform === 'win32' ? 'whisper-cli.exe' : 'whisper-cli';
 // The Vulkan bundle runs on AMD/NVIDIA/Intel GPUs and falls back to its own CPU backends.
 export const whisperBuilds = [
+  { kind: 'cuda', program:path.join(whisperDir,'cuda',exe) },
   { kind: 'gpu', program: path.join(whisperDir, 'vulkan', exe) },
   { kind: 'cpu', program: path.join(whisperDir, 'cpu', exe) },
 ];
@@ -33,39 +37,49 @@ export const modelsDirectory = dataRoot => process.env.NOTAKILLITE_MODELS_DIR ||
 export const modelPath = (directory, name) => path.join(directory, WHISPER_MODELS[name].file);
 
 export async function whisperStatus(modelsDir) {
-  const [gpu, cpu, vad] = await Promise.all([exists(whisperBuilds[0].program), exists(whisperBuilds[1].program), exists(vadModel)]);
+  const installed = await Promise.all(whisperBuilds.map(b=>exists(b.program))); const gpu=installed.some((v,i)=>v&&whisperBuilds[i].kind!=='cpu'), cpu=installed.some((v,i)=>v&&whisperBuilds[i].kind==='cpu'), vad=await exists(vadModel);
   const models = {};
   for (const name of Object.keys(WHISPER_MODELS)) {
     const info = await stat(modelPath(modelsDir, name)).catch(() => null);
-    models[name] = info?.size === WHISPER_MODELS[name].bytes;
+    models[name] = info?.size === WHISPER_MODELS[name].bytes && await verifiedModel(modelPath(modelsDir,name),WHISPER_MODELS[name]);
   }
   return { installed: (gpu || cpu) && vad, gpuBuild: gpu, models };
 }
 
 /** Downloads a pinned model once, verifying its SHA-256 before it can be used. */
-export async function ensureModel(name, directory, { signal, onProgress = () => {}, fetchImpl = fetch } = {}) {
-  const model = WHISPER_MODELS[name];
-  if (!model) throw new Error('Choose a supported Whisper model.');
-  const target = modelPath(directory, name);
-  if ((await stat(target).catch(() => null))?.size === model.bytes) return target;
-  await mkdir(directory, { recursive: true });
-  const partial = `${target}.partial`;
-  await rm(partial, { force: true });
-  const response = await fetchImpl(modelUrl(name), { signal, redirect: 'follow' });
-  if (!response.ok || !response.body) throw new Error(`Could not download the ${model.label} model (HTTP ${response.status}). Check your internet connection and retry.`);
-  const hash = createHash('sha256');
-  let received = 0, reported = -1;
-  const body = Readable.fromWeb(response.body);
-  body.on('data', chunk => {
-    hash.update(chunk); received += chunk.length;
-    const percent = Math.floor(received / model.bytes * 100);
-    if (percent !== reported) { reported = percent; onProgress(received / model.bytes); }
-  });
-  try { await pipeline(body, createWriteStream(partial), { signal }); }
-  catch (error) { await rm(partial, { force: true }); throw error; }
-  if (received !== model.bytes || hash.digest('hex') !== model.sha256) { await rm(partial, { force: true }); throw new Error(`The ${model.label} download was incomplete or changed. Retry the export.`); }
-  await rename(partial, target);
-  return target;
+const modelTransfers = new Map();
+export async function verifiedModel(target, model) {
+  const info = await stat(target).catch(() => null); if (!info || info.size !== model.bytes) return false;
+  const identity = `${info.size}:${info.mtimeMs}:${info.ctimeMs}`;
+  const receipt = await readFile(`${target}.verified.json`, 'utf8').then(JSON.parse).catch(() => null);
+  if (receipt?.identity === identity && receipt.sha256 === model.sha256) return true;
+  if (await hashFile(target) !== model.sha256) return false;
+  await atomicJson(`${target}.verified.json`, { identity, sha256:model.sha256 }); return true;
+}
+export async function ensureModel(name, directory, options = {}) {
+  const model = WHISPER_MODELS[name]; if (!model) throw new Error('Choose a supported Whisper model.');
+  const target = modelPath(directory,name); options.signal?.throwIfAborted();
+  if (modelTransfers.has(target)) { await modelTransfers.get(target); options.signal?.throwIfAborted(); return target; }
+  const transfer = downloadModelFile(target,model,name,options); modelTransfers.set(target,transfer);
+  try { return await transfer; } finally { modelTransfers.delete(target); }
+}
+async function downloadModelFile(target,model,name,{signal,onProgress=()=>{},fetchImpl=fetch}) {
+  if (await verifiedModel(target,model)) return target;
+  await mkdir(path.dirname(target),{recursive:true}); const partial = `${target}.partial`;
+  let received = (await stat(partial).catch(()=>null))?.size || 0;
+  if (received > model.bytes) { await rm(partial,{force:true}); received=0; }
+  if (received < model.bytes) {
+    const response = await fetchImpl(modelUrl(name),{signal,redirect:'follow',headers:received?{Range:`bytes=${received}-`}:{}});
+    if (!response.ok || !response.body) throw new Error(`Model download failed (HTTP ${response.status}).`);
+    if (response.status === 206 && !response.headers.get('content-range')?.startsWith(`bytes ${received}-`)) throw new Error('Invalid resumed download range.');
+    if (response.status !== 206) received=0;
+    const body=Readable.fromWeb(response.body); let tooLarge=false;
+    body.on('data',chunk=>{received+=chunk.length;if(received>model.bytes){tooLarge=true;body.destroy(new Error('Model download exceeds expected size.'));} onProgress(Math.min(1,received/model.bytes));});
+    try { await pipeline(body,createWriteStream(partial,{flags:response.status===206?'a':'w'}),{signal}); }
+    catch(e) { if(tooLarge) await rm(partial,{force:true}); throw e; }
+  }
+  if ((await stat(partial)).size !== model.bytes || await hashFile(partial) !== model.sha256) { await rm(partial,{force:true}); throw new Error('Model download checksum failed.'); }
+  await rename(partial,target); await verifiedModel(target,model); return target;
 }
 
 /** Runs a process, streaming stderr lines to `onLine`, with cancellation and a timeout. */
@@ -99,7 +113,7 @@ let workingBuild; // Remember which build works on this PC after the first run.
 
 export async function runWhisper(args, { signal, onLine, only } = {}) {
   const builds = [];
-  for (const build of whisperBuilds) if ((!only || build.kind === only) && await exists(build.program)) builds.push(build);
+  for (const build of whisperBuilds) if ((!only || build.kind === only || only === 'vulkan' && build.kind === 'gpu') && await exists(build.program)) builds.push(build);
   if (!builds.length) throw new Error('Whisper is not installed. Reinstall Notakillite, or choose Groq in the transcript settings.');
   if (workingBuild) builds.sort((a, b) => (b.kind === workingBuild) - (a.kind === workingBuild));
   let last;
@@ -141,38 +155,37 @@ export function whisperPrompt(language, vocabulary = '') {
   return [base, terms].filter(Boolean).join(' ');
 }
 
-/**
- * Text-context arguments. whisper.cpp normally feeds the last ~224 decoded tokens back into every
- * 30-second window; one stuck sentence then re-primes every later window (the P0 "971 repeats"
- * failure, see docs/transcription-reliability.md). We never feed decoded text back:
- *  - no prompt: `-mc 0` (no text context at all);
- *  - with a prompt (course vocabulary / Arabic hint): the prompt is carried as a fixed prefix and
- *    the context budget is (prompt words + 1). Every word is at least one token, so the prefix
- *    fills the budget and no decoded tokens fit after it.
+/** CLI compatibility fallback: no generated text context, fixed vocabulary prefix only.
+ * The native worker enforces the actual 96-token vocabulary budget with whisper_tokenize.
  */
 export function contextArgs(prompt = '') {
-  const text = prompt.trim();
-  if (!text) return ['-mc', '0'];
-  return ['--prompt', text, '--carry-initial-prompt', '-mc', String(text.split(/\s+/).length + 1)];
+  const text=prompt.trim();
+  return text ? ['--prompt',text,'--carry-initial-prompt','-mc','1'] : ['-mc','0'];
 }
 
 export const VAD_ARGS = ['--vad', '-vm', vadModel, '-vsd', '500', '-vp', '200'];
 
 /** Arguments for one whisper-cli run over `wav`. Never uses -ot/-d (with --vad they count time
  *  on the silence-removed timeline): to transcribe an interval, cut the audio instead. */
-export function whisperArgs({ modelFile, wav, language, prompt = '', vad = true, output }) {
-  return ['-m', modelFile, '-f', wav, '-l', language || 'auto', '-t', threads(), '-oj', '-of', output, '-pp', '-sns',
+export function whisperArgs({ modelFile, wav, language, prompt = '', vad = true, output, threadCount }) {
+  return ['-m', modelFile, '-f', wav, '-l', language || 'auto', '-t', String(threadCount || 1), '-oj', '-of', output, '-pp', '-sns',
     ...(vad ? VAD_ARGS : []), ...contextArgs(prompt)];
 }
 
 /** One whisper-cli pass; segments are relative to the start of `wav`. */
-export async function whisperPass({ modelFile, wav, language, prompt, vad = true, work, name = 'whisper', signal, onLine, only, runner = runWhisper }) {
+export async function whisperPass({ modelFile, wav, language, prompt, vad, work, name = 'whisper', signal, onLine, only, threadCount, backend = 'auto', runner = runWhisper, production = runner === runWhisper }) {
+  if (production) { const result = await persistentPass({ modelFile, wav, language, prompt, threadCount, signal, backend, vad: vad === true, vadModelPath: vadModel }); if (result) return result; }
+  // The measured persistent worker path keeps VAD off on its initial pass. The CLI keeps its
+  // existing VAD-on default; an explicit retry boolean is honored by either backend.
+  let appliedVad = vad ?? true;
   const output = path.join(work, name);
   await rm(`${output}.json`, { force: true });
-  const result = await runner(whisperArgs({ modelFile, wav, language, prompt, vad, output }), { signal, onLine, only });
+  let result;
+  try { result = await runner(whisperArgs({ modelFile, wav, language, prompt, vad:appliedVad, output, threadCount }), { signal, onLine, only }); }
+  catch(error) { if(signal?.aborted || !appliedVad || !production) throw error; await rm(`${output}.json`,{force:true}); appliedVad=false; result = await runner(whisperArgs({modelFile,wav,language,prompt,vad:false,output,threadCount}),{signal,onLine,only}); result.fallback='voice-detector-disabled-after-error'; }
   const parsed = parseWhisperJson(await readFile(`${output}.json`, 'utf8'));
   await rm(`${output}.json`, { force: true });
-  return { ...parsed, build: result.build, device: result.build === 'gpu' && !/no GPU found/i.test(result.stderr || '') ? 'GPU' : 'CPU' };
+  return { ...parsed, build: result.build, device: /(?:using (?:CUDA|Vulkan\d+)|offload(?:ed|ing).*(?:GPU|device)|ggml_(?:cuda|vulkan).*using device)/i.test(result.stderr || '') ? 'GPU' : 'CPU', vadApplied:appliedVad, vadSegments:null, ...(result.fallback?{fallback:result.fallback}:{}) };
 }
 
 export function parseWhisperJson(json) {
@@ -181,20 +194,24 @@ export function parseWhisperJson(json) {
   return { language: data.result?.language || data.params?.language, segments };
 }
 
-export async function transcribeLocal({ ffmpeg, wav, duration, model = 'turbo', language = 'auto', vocabulary = '', modelsDir, work, signal, onStage = () => {}, runTool, fetchImpl, runner = runWhisper }) {
-  const modelFile = await ensureModel(model, modelsDir, { signal, fetchImpl, onProgress: fraction => onStage({ phase: `Downloading ${WHISPER_MODELS[model].label} (one time) · ${Math.round(fraction * 100)}%`, fraction: fraction * 0.3 }) });
+export async function transcribeLocal({ ffmpeg, wav, duration, model = 'turbo', language = 'auto', vocabulary = '', modelsDir, work, signal, onStage = () => {}, runTool, fetchImpl, runner = runWhisper, threads: threadCount, backend = 'auto', name = 'whisper', modelResolver = ensureModel }) {
+  threadCount ||= resourcePlan(await capabilities()).threads;
+  const selectedRunner = runner;
+  if (['cuda','vulkan'].includes(backend) && !(await exists(whisperBuilds.find(b=>b.kind===(backend==='vulkan'?'gpu':'cuda')).program))) throw new Error(`The selected ${backend} backend is not installed.`);
+  if (backend === 'cpu' && !process.env.NOTAKILLITE_WORKER) runner = (args, opts) => selectedRunner(args, { ...opts, only: 'cpu' });
+  const modelFile = await modelResolver(model, modelsDir, { signal, fetchImpl, onProgress: fraction => onStage({ phase: `Downloading ${WHISPER_MODELS[model].label} (one time) · ${Math.round(fraction * 100)}%`, fraction: fraction * 0.3 }) });
   if (!(await exists(vadModel))) throw new Error('The Whisper voice detector is missing. Reinstall Notakillite.');
   let spoken = language;
-  if (language === 'auto') {
+  if (language === 'auto' && !(await hasPersistentWorker(backend))) {
     onStage({ phase: 'Detecting lecture language', fraction: 0.3 });
     spoken = await detectLanguage({ ffmpeg, wav, duration, model: modelFile, work, signal, runTool, runner });
   }
   const prompt = whisperPrompt(spoken, vocabulary);
   onStage({ phase: `Transcribing · ${WHISPER_MODELS[model].label}`, fraction: 0.32 });
-  const pass = await whisperPass({ modelFile, wav, language: spoken, prompt, work, signal, runner, onLine: line => {
+  const pass = await whisperPass({ modelFile, wav, language: spoken, prompt, work, name, signal, runner, backend, threadCount, production:selectedRunner === runWhisper, onLine: line => {
     const match = /progress\s*=\s*(\d+)%/.exec(line);
     if (match) onStage({ phase: `Transcribing ${match[1]}% · ${WHISPER_MODELS[model].label}`, fraction: 0.32 + Number(match[1]) / 100 * 0.5 });
   } });
-  return { language: spoken === 'auto' ? pass.language : spoken, segments: pass.segments, engine: 'local', model: WHISPER_MODELS[model].label, device: pass.device, build: pass.build,
-    settings: { modelFile, model, language: spoken, prompt, vad: true }, runner };
+  return { language: spoken === 'auto' ? pass.language : spoken, segments: pass.segments, engine: 'local', model: WHISPER_MODELS[model].label, device: pass.device, build: pass.build, backendName:pass.backendName, deviceName:pass.deviceName,
+    nativeMetrics:pass.nativeMetrics, settings: { modelFile, model, language: spoken, prompt, vad: pass.vadApplied }, runner };
 }
